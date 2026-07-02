@@ -1,0 +1,55 @@
+// ---------------------------------------------------------------------------
+// Theme configuration — Telecom Console
+//
+// Direction: a network-operations console. The palette leans on a cyan/teal
+// "signal" primary (connectivity, uptime) rather than the Material default,
+// with restraint: one confident accent, quiet surfaces, and full light/dark
+// support deferred to the user's system preference.
+// ---------------------------------------------------------------------------
+@use '@angular/material' as mat;
+@use 'material-icons/iconfont/filled.css';
+
+html {
+  @include mat.theme((
+    color: (
+      primary: mat.$cyan-palette,
+      tertiary: mat.$orange-palette,
+    ),
+    typography: Roboto,
+    density: 0,
+  ));
+
+  // Respect the OS light/dark preference out of the box.
+  color-scheme: light dark;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-medium);
+  font-family: Roboto, 'Helvetica Neue', sans-serif;
+}
+
+// Notification (snackbar) accents, tied to system color tokens.
+.snack-success {
+  --mdc-snackbar-container-color: var(--mat-sys-primary-container);
+  --mdc-snackbar-supporting-text-color: var(--mat-sys-on-primary-container);
+}
+.snack-error {
+  --mdc-snackbar-container-color: var(--mat-sys-error-container);
+  --mdc-snackbar-supporting-text-color: var(--mat-sys-on-error-container);
+}
+
+// Honor reduced-motion preferences globally.
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
