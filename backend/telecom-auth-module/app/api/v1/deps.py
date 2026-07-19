@@ -27,6 +27,9 @@ from app.services.group_service import GroupService
 from app.services.api_key_service import ApiKeyService
 from app.services.contact_service import ContactService
 from app.services.contact_import_service import ContactImportService
+from app.services.telephony_service import TelephonyService
+from app.repositories.telephony_repository import TelephonyConnectionRepository
+from app.services.registration_service import RegistrationService
 from app.services.contact_list_service import ContactListService
 from app.repositories.contact_repository import ContactRepository
 from app.repositories.contact_list_repository import ContactListRepository
@@ -228,3 +231,54 @@ def get_contact_list_service(db: DbSession, ctx: CurrentContext) -> "ContactList
 
 def get_contact_import_service(db: DbSession, ctx: CurrentContext) -> "ContactImportService":
     return ContactImportService(db, ContactRepository(db, ctx), AuditService(db))
+
+
+def get_telephony_service(db: DbSession, ctx: CurrentContext) -> "TelephonyService":
+    # Explicitly scoped in the repo (mixes platform-level + per-tenant rows), so
+    # the service reads scope from repo.ctx rather than the base tenant filter.
+    return TelephonyService(
+        db, TelephonyConnectionRepository(db, ctx), AuditService(db)
+    )
+
+
+def get_registration_service(db: DbSession) -> "RegistrationService":
+    # Public + platform-level (no tenant context): register is pre-auth, and
+    # approve/reject are super-admin actions that pass the reviewer explicitly.
+    return RegistrationService(db, audit=AuditService(db))
+
+
+def get_voice_service(db: DbSession, ctx: CurrentContext) -> "VoiceService":
+    """Factory for the Voice Platform service.
+
+    Injects three repositories:
+      - VoiceExtensionRepository (tenant-scoped)
+      - VoiceCallLogRepository   (tenant-scoped)
+      - TelephonyConnectionRepository (platform-level; used for connection resolution)
+    """
+    from app.repositories.voice_repository import (
+        VoiceCallLogRepository,
+        VoiceExtensionRepository,
+    )
+    from app.services.voice_service import VoiceService
+
+    return VoiceService(
+        db,
+        VoiceExtensionRepository(db, ctx),
+        VoiceCallLogRepository(db, ctx),
+        TelephonyConnectionRepository(db, ctx),
+        AuditService(db),
+    )
+
+
+def get_missed_call_service(
+    db: DbSession, ctx: CurrentContext
+) -> "MissedCallService":
+    """Factory for the Missed Call Platform service."""
+    from app.repositories.missed_call_repository import MissedCallRepository
+    from app.services.missed_call_service import MissedCallService
+
+    return MissedCallService(
+        db,
+        MissedCallRepository(db, ctx),
+        AuditService(db),
+    )

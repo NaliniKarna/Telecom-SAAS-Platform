@@ -19,6 +19,8 @@ class CompanyStatus(str, enum.Enum):
     ACTIVE = "active"
     SUSPENDED = "suspended"
     DEACTIVATED = "deactivated"
+    PENDING_APPROVAL = "pending_approval"
+    REJECTED = "rejected"
 
 
 class ChangeRequestStatus(str, enum.Enum):
@@ -33,13 +35,10 @@ class GroupStatus(str, enum.Enum):
 
 
 class GroupType(str, enum.Enum):
-    # Groups are organizational user groups only. Contacts use their own
-    # dedicated contact_lists tables, so there is no CONTACT group type.
     INTERNAL = "internal"
 
 
 class ApiKeyStatus(str, enum.Enum):
-    # Derived at read time from revoked_at / expires_at, not stored.
     ACTIVE = "active"
     REVOKED = "revoked"
     EXPIRED = "expired"
@@ -94,10 +93,74 @@ class SmsMessageStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class TelephonyProvider(str, enum.Enum):
+    NULL = "null"
+    AMI = "ami"
+
+
+class TelephonyConnectionStatus(str, enum.Enum):
+    UNKNOWN = "unknown"
+    CONNECTED = "connected"
+    ERROR = "error"
+    DISABLED = "disabled"
+
+
 class TokenType(str, enum.Enum):
     ACCESS = "access"
     REFRESH = "refresh"
     PASSWORD_RESET = "password_reset"
+    EMAIL_VERIFICATION = "email_verification"
+
+
+# ── Voice Platform (Phase 5) ──────────────────────────────────────────────────
+
+class AgentStatus(str, enum.Enum):
+    AVAILABLE = "available"
+    BUSY = "busy"
+    AWAY = "away"
+    OFFLINE = "offline"
+
+
+class CallDirection(str, enum.Enum):
+    INBOUND = "inbound"
+    OUTBOUND = "outbound"
+
+
+class CallStatus(str, enum.Enum):
+    INITIATED = "initiated"
+    RINGING = "ringing"
+    ANSWERED = "answered"
+    BUSY = "busy"
+    NO_ANSWER = "no_answer"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    COMPLETED = "completed"
+
+
+ACTIVE_CALL_STATUSES = frozenset([
+    CallStatus.INITIATED.value,
+    CallStatus.RINGING.value,
+    CallStatus.ANSWERED.value,
+])
+
+
+# ── Missed Call Platform (Phase 6) ────────────────────────────────────────────
+
+class MissedCallStatus(str, enum.Enum):
+    """Lifecycle status of a missed-call record."""
+    NEW = "new"                   # just detected, nobody has acted on it
+    ACKNOWLEDGED = "acknowledged" # someone has seen / claimed it
+    RETURNED = "returned"         # a callback was made (regardless of outcome)
+    CLOSED = "closed"             # resolved — no further action needed
+
+
+class CallbackOutcome(str, enum.Enum):
+    """Result of a callback attempt."""
+    ANSWERED = "answered"
+    NO_ANSWER = "no_answer"
+    BUSY = "busy"
+    VOICEMAIL = "voicemail"
+    FAILED = "failed"
 
 
 class Permission(str, enum.Enum):
@@ -131,9 +194,7 @@ class Permission(str, enum.Enum):
     CONTACT_READ = "contact.read"
     CONTACT_MANAGE = "contact.manage"
 
-    # SMS. Foundation (sender IDs + templates) uses sms.read / sms.manage;
-    # the Campaign Engine adds sms.send (schedule / send / cancel) and Tracking
-    # & Analytics adds sms.analytics. All four are implemented and enforced.
+    # SMS
     SMS_READ = "sms.read"
     SMS_MANAGE = "sms.manage"
     SMS_SEND = "sms.send"
@@ -142,6 +203,21 @@ class Permission(str, enum.Enum):
     # Audit & stats
     AUDIT_READ = "audit.read"
     STATS_READ = "stats.read"
+
+    # Telephony / FreePBX-Asterisk integration layer (super admin only)
+    TELEPHONY_READ = "telephony.read"
+    TELEPHONY_MANAGE = "telephony.manage"
+
+    # Voice Platform (Phase 5)
+    VOICE_READ = "voice.read"
+    VOICE_MANAGE = "voice.manage"
+    VOICE_DIAL = "voice.dial"
+
+    # Missed Call Platform (Phase 6)
+    # missed_call.read   : view missed call log, dashboard, history
+    # missed_call.manage : acknowledge, assign, add notes, update status, callback
+    MISSED_CALL_READ = "missed_call.read"
+    MISSED_CALL_MANAGE = "missed_call.manage"
 
 
 # Role -> permission mapping. Super admin is handled as a wildcard at check time.
@@ -167,8 +243,15 @@ ROLE_PERMISSIONS: dict[RoleName, set[Permission]] = {
         Permission.SMS_ANALYTICS,
         Permission.AUDIT_READ,
         Permission.STATS_READ,
+        Permission.VOICE_READ,
+        Permission.VOICE_MANAGE,
+        Permission.VOICE_DIAL,
+        Permission.MISSED_CALL_READ,
+        Permission.MISSED_CALL_MANAGE,
     },
     RoleName.COMPANY_USER: {
         Permission.USER_READ,
+        Permission.VOICE_READ,
+        Permission.MISSED_CALL_READ,
     },
 }

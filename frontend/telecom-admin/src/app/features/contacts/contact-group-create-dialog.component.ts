@@ -12,7 +12,7 @@ import { ContactListService } from './contact-list.service';
   standalone: true,
   imports: [ReactiveFormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule],
   template: `
-    <h2 mat-dialog-title>New contact list</h2>
+    <h2 mat-dialog-title>New contact group</h2>
     <mat-dialog-content>
       <form [formGroup]="form" class="form">
         <mat-form-field appearance="outline">

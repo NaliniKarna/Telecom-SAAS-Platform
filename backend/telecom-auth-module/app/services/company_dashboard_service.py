@@ -2,23 +2,20 @@
 
 Aggregates KPIs and feeds for one company. The company_id is supplied by the
 route from the authenticated token — never from client input — so every query
-is confined to the caller's own tenant. All KPIs are live aggregations over the
-caller's company — users, groups, API keys, contacts, contact lists, SMS
-campaigns / templates / sender IDs / messages, messages-sent-today, and delivery
-rate. (Earlier builds stubbed group / API-key counts as zero; those are now real
-counts via _count().)
+is confined to the caller's own tenant.
 """
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import SmsMessageStatus, UserStatus
+from app.core.constants import CallbackOutcome, MissedCallStatus, SmsMessageStatus, UserStatus
 from app.core.exceptions import NotFoundError
 from app.models.api_key import ApiKey
 from app.models.company import Company
 from app.models.contact import Contact, ContactList
 from app.models.group import Group
+from app.models.missed_call import MissedCall, MissedCallCallback
 from app.models.sms import SmsCampaign, SmsMessage, SmsSenderId, SmsTemplate
 from app.models.user import User
 from app.schemas.company_dashboard import (
@@ -44,6 +41,7 @@ class CompanyDashboardService:
 
         total_users, active_users = await self._user_counts(company_id)
         sms_counts = await self._sms_counts(company_id)
+        mc_kpis = await self._missed_call_kpis(company_id)
         kpis = CompanyKpis(
             total_users=total_users,
             active_users=active_users,
@@ -57,6 +55,7 @@ class CompanyDashboardService:
             total_sms_messages=sms_counts["messages"],
             messages_sent_today=await self._messages_sent_today(company_id),
             delivery_rate=await self._delivery_rate(company_id),
+            **mc_kpis,
         )
         summary = CompanySummary(
             company_name=company.name,
@@ -81,8 +80,6 @@ class CompanyDashboardService:
         )
 
     async def _count(self, model, company_id, *, soft_delete: bool = True) -> int:
-        """Count rows for a company. Most tables soft-delete via deleted_at;
-        api_keys uses revoked_at instead, so it's counted whole."""
         stmt = select(func.count(model.id)).where(model.company_id == company_id)
         if soft_delete and hasattr(model, "deleted_at"):
             stmt = stmt.where(model.deleted_at.is_(None))
@@ -154,6 +151,52 @@ class CompanyDashboardService:
             "templates": int(templates or 0),
             "sender_ids": int(sender_ids or 0),
             "messages": int(messages or 0),
+        }
+
+    async def _missed_call_kpis(self, company_id) -> dict:
+        """Compute missed-call KPIs for the company dashboard."""
+        # Missed calls today
+        start = datetime.now(timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        today = int(await self.session.scalar(
+            select(func.count(MissedCall.id)).where(
+                MissedCall.company_id == company_id,
+                MissedCall.received_at >= start,
+            )
+        ) or 0)
+
+        # Pending (new + acknowledged)
+        pending = int(await self.session.scalar(
+            select(func.count(MissedCall.id)).where(
+                MissedCall.company_id == company_id,
+                MissedCall.status.in_([
+                    MissedCallStatus.NEW.value,
+                    MissedCallStatus.ACKNOWLEDGED.value,
+                ]),
+            )
+        ) or 0)
+
+        # Callback success rate
+        cb_row = (await self.session.execute(
+            select(
+                func.count().label("total"),
+                func.sum(
+                    case(
+                        (MissedCallCallback.outcome == CallbackOutcome.ANSWERED.value, 1),
+                        else_=0,
+                    )
+                ).label("answered"),
+            ).where(MissedCallCallback.company_id == company_id)
+        )).one()
+        cb_total = int(cb_row.total or 0)
+        cb_answered = int(cb_row.answered or 0)
+        success_rate = round(cb_answered / cb_total * 100, 1) if cb_total else 0.0
+
+        return {
+            "missed_calls_today": today,
+            "pending_callbacks": pending,
+            "callback_success_rate": success_rate,
         }
 
     async def _recent_users(

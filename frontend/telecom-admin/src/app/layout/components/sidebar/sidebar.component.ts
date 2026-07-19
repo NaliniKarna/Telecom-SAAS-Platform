@@ -38,9 +38,21 @@ const EXPANDED_STORAGE_KEY = 'tlk.nav.expanded';
             >
               <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
               <span matListItemTitle>{{ item.label }}</span>
-              <mat-icon matListItemMeta class="chevron">
-                {{ isExpanded(item) ? 'expand_less' : 'expand_more' }}
-              </mat-icon>
+              <span
+                matListItemMeta
+                class="chevron"
+                [class.chevron--open]="isExpanded(item)"
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+                  <path
+                    d="M6 9l6 6 6-6"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
             </a>
 
             @if (isExpanded(item)) {
@@ -98,8 +110,18 @@ const EXPANDED_STORAGE_KEY = 'tlk.nav.expanded';
         cursor: pointer;
       }
       .group-parent .chevron {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         color: var(--mat-sys-on-surface-variant);
         transition: transform 120ms ease;
+        flex-shrink: 0;
+      }
+      .group-parent .chevron svg {
+        display: block;
+      }
+      .group-parent .chevron.chevron--open {
+        transform: rotate(180deg);
       }
       /* Highlight the parent (text/icon) when any child route is active,
          distinct from the solid active-link fill used by the live route. */

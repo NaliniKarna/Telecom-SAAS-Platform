@@ -16,6 +16,9 @@ from app.models.sms import (
     SmsSenderId,
     SmsTemplate,
 )
+from app.models.telephony import TelephonyConnection
+from app.models.voice import VoiceCallLog, VoiceExtension
+from app.models.missed_call import MissedCall, MissedCallCallback, MissedCallNote
 from app.models.user import User, UserRole
 
 __all__ = [
@@ -30,6 +33,12 @@ __all__ = [
     "GroupMember",
     "PlatformSettings",
     "SubscriptionPlan",
+    "TelephonyConnection",
+    "VoiceExtension",
+    "VoiceCallLog",
+    "MissedCall",
+    "MissedCallNote",
+    "MissedCallCallback",
     "User",
     "UserRole",
     "Role",

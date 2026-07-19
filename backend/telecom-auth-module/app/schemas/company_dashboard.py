@@ -18,6 +18,10 @@ class CompanyKpis(BaseModel):
     total_sms_messages: int = 0
     messages_sent_today: int = 0
     delivery_rate: float = 0.0
+    # ── Missed Call KPIs (Phase 6) ──
+    missed_calls_today: int = 0
+    pending_callbacks: int = 0
+    callback_success_rate: float = 0.0
 
 
 class CompanySummary(BaseModel):

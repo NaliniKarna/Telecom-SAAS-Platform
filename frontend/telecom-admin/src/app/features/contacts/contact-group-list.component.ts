@@ -25,22 +25,22 @@ import { ContactGroupCreateDialogComponent } from './contact-group-create-dialog
   template: `
     <header class="page-header">
       <div>
-        <h1>Contact Lists</h1>
-        <p>Group contacts into lists for campaigns and messaging.</p>
+        <h1>Contact Groups</h1>
+        <p>Organize contacts into groups for campaigns and messaging.</p>
       </div>
-      <button mat-flat-button color="primary" (click)="create()"><mat-icon>add</mat-icon> New list</button>
+      <button mat-flat-button color="primary" (click)="create()"><mat-icon>add</mat-icon> New group</button>
     </header>
 
     <div class="filters">
       <mat-form-field appearance="outline">
         <mat-label>Search</mat-label>
-        <input matInput [(ngModel)]="search" (keyup.enter)="load()" placeholder="List name" />
+        <input matInput [(ngModel)]="search" (keyup.enter)="load()" placeholder="Group name" />
       </mat-form-field>
     </div>
 
     @if (loading()) { <mat-progress-bar mode="indeterminate" /> }
     @if (!loading() && rows().length === 0) {
-      <div class="empty"><mat-icon>format_list_bulleted</mat-icon><p>No contact lists yet.</p></div>
+      <div class="empty"><mat-icon>format_list_bulleted</mat-icon><p>No contact groups yet.</p></div>
     }
     @if (rows().length > 0) {
       <mat-card appearance="outlined">

@@ -16,12 +16,28 @@ export const authGuard: CanActivateFn = (_route, state) => {
   });
 };
 
-/** Inverse guard: keeps authenticated users out of login/public pages. */
+/** Inverse guard: keeps authenticated users out of login/public pages,
+ * sending them to their role-specific landing (super admin -> /admin). */
 export const guestGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   const router = inject(Router);
 
   return auth.isAuthenticated()
-    ? router.createUrlTree(['/dashboard'])
+    ? router.createUrlTree([auth.landingRoute()])
     : true;
+};
+
+/**
+ * Root ("/") entry decision. Unauthenticated visitors see the public landing
+ * page; authenticated users are sent straight to their role-based app landing.
+ * This makes the landing page the public entry point without touching the
+ * login flow.
+ */
+export const rootEntryGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+
+  return auth.isAuthenticated()
+    ? router.createUrlTree([auth.landingRoute()])
+    : router.createUrlTree(['/landing']);
 };

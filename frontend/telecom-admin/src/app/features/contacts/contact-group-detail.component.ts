@@ -22,7 +22,7 @@ import { NotificationService } from '../../core/services/notification.service';
     MatTabsModule, MatTableModule, MatProgressBarModule,
   ],
   template: `
-    <a routerLink="/contact-lists" class="back"><mat-icon>arrow_back</mat-icon> Contact Lists</a>
+    <a routerLink="/contact-lists" class="back"><mat-icon>arrow_back</mat-icon> Contact Groups</a>
     @if (loading()) { <mat-progress-bar mode="indeterminate" /> }
     @if (group(); as g) {
       <header class="page-header">
@@ -30,7 +30,7 @@ import { NotificationService } from '../../core/services/notification.service';
           <h1>{{ g.name }}</h1>
           <span class="muted">{{ g.member_count }} member{{ g.member_count === 1 ? '' : 's' }}</span>
         </div>
-        <button mat-stroked-button color="warn" (click)="remove(g)"><mat-icon>delete</mat-icon> Delete list</button>
+        <button mat-stroked-button color="warn" (click)="remove(g)"><mat-icon>delete</mat-icon> Delete group</button>
       </header>
       <mat-tab-group>
         <mat-tab label="Overview">
@@ -50,7 +50,7 @@ import { NotificationService } from '../../core/services/notification.service';
             <button mat-flat-button color="primary" (click)="addContacts(g)"><mat-icon>person_add</mat-icon> Add contacts</button>
           </div>
           @if (members().length === 0) {
-            <div class="empty"><mat-icon>group_off</mat-icon><p>No contacts in this list yet.</p></div>
+            <div class="empty"><mat-icon>group_off</mat-icon><p>No contacts in this group yet.</p></div>
           } @else {
             <mat-card appearance="outlined" class="tab-card">
               <table mat-table [dataSource]="members()">
@@ -139,6 +139,6 @@ export class ContactGroupDetailComponent {
     this.api.removeContact(g.id, m.contact_id).subscribe({ next: (list) => { this.refresh(list); this.notify.success('Contact removed.'); } });
   }
   remove(g: ContactGroup): void {
-    this.api.remove(g.id).subscribe({ next: () => { this.notify.success('List deleted.'); this.router.navigate(['/contact-lists']); } });
+    this.api.remove(g.id).subscribe({ next: () => { this.notify.success('Group deleted.'); this.router.navigate(['/contact-lists']); } });
   }
 }

@@ -6,15 +6,19 @@ Lifecycle:
       └──────send───────────┘  (send-now works from draft or scheduled)
     draft / scheduled ──cancel──▶ cancelled
 
-Editing is allowed only while a campaign is in draft. Sending validates that the
-sender is approved + active and the template exists, freezes the recipient set
-(resolution layer: dedupe + snapshot), renders per-recipient content (snapshot
-the sender label + body at send time), dispatches through the SmsProvider seam
-(NullSmsProvider today), persists one SmsMessage per recipient, and updates the
-campaign counters/status.
+**Kafka integration (Phase 7):**
+When `send_campaign()` is called, the service:
+  1. Validates the campaign is ready (sender approved, template exists).
+  2. Transitions status to `processing`.
+  3. Publishes a `sms.campaign.created` event to Kafka.
+  4. Returns immediately — the campaign processes ASYNCHRONOUSLY.
 
-Tenant isolation comes from the repositories' context. All state changes are
-audited: create / update / schedule / send (execute) / cancel.
+The Kafka worker (`app.workers.sms_campaign_worker`) picks up the event,
+resolves recipients, fans out per-message `sms.message.send` events,
+and those are dispatched through the SMS Forwarding API.
+
+When Kafka is disabled (`KAFKA_ENABLED=false`), the service falls back to
+the original synchronous dispatch loop (NullSmsProvider or AkashSmsProvider).
 """
 from __future__ import annotations
 
@@ -86,7 +90,7 @@ class SmsCampaignService:
         return c
 
     async def list_recipients(self, campaign_id, *, offset=0, limit=50):
-        await self.get_campaign(campaign_id)  # tenant existence check
+        await self.get_campaign(campaign_id)
         return await self.recipients.list_for_campaign(campaign_id, offset=offset, limit=limit)
 
     async def list_messages(self, campaign_id, *, status=None, offset=0, limit=50):
@@ -112,8 +116,6 @@ class SmsCampaignService:
             status=SmsCampaignStatus.DRAFT.value,
             created_by=actor_id,
         )
-        # For an individual-contacts source, snapshot the selection now so the
-        # draft remembers it (re-resolved/refreshed at send time).
         if data.source_type == SmsCampaignSource.CONTACTS:
             await self._freeze_contacts(campaign, data.contact_ids)
 
@@ -140,17 +142,13 @@ class SmsCampaignService:
                 patch.get("sender_id", campaign.sender_id),
                 patch.get("template_id", campaign.template_id),
             )
-        # Resolve the effective source type for source persistence.
         effective_source = patch.get("source_type", campaign.source_type)
         if "source_type" in patch and patch["source_type"] is not None:
-            # Source type is being changed: reset the list link accordingly.
             patch["source_list_id"] = source_list_id if effective_source == SmsCampaignSource.CONTACT_LIST.value else None
         elif source_list_id is not None:
-            # Same source, but a new list was explicitly provided.
             patch["source_list_id"] = source_list_id
         if patch:
             await self.campaigns.update(campaign, **patch)
-        # If a contacts selection was supplied, refreeze the snapshot rows.
         if effective_source == SmsCampaignSource.CONTACTS.value and contact_ids is not None:
             await self._freeze_contacts(campaign, contact_ids)
         await self.audit.record(
@@ -200,21 +198,63 @@ class SmsCampaignService:
         return campaign
 
     # ===================================================================== #
-    # Send now (execute)
+    # Send now (execute) — Kafka-first, fallback to synchronous
     # ===================================================================== #
     async def send_campaign(self, campaign_id, *, actor_id=None, ip=None) -> SmsCampaign:
         campaign = await self.get_campaign(campaign_id)
         if campaign.status not in _SENDABLE:
             raise ValidationError("Only draft or scheduled campaigns can be sent")
-        return await self._execute(campaign, actor_id=actor_id, ip=ip)
 
-    async def _execute(self, campaign: SmsCampaign, *, actor_id=None, ip=None) -> SmsCampaign:
         sender, template = await self._assert_ready(campaign)
+
+        # Transition to processing BEFORE publishing to Kafka.
+        await self.campaigns.update(campaign, status=SmsCampaignStatus.PROCESSING.value)
+        await self.audit.record(
+            action="send", entity_type=_ENTITY, entity_id=campaign.id,
+            actor_id=actor_id, company_id=campaign.company_id, ip_address=ip,
+            new_values={"mode": "kafka" if self._kafka_enabled else "sync"},
+        )
+        await self.session.commit()
+        await self.session.refresh(campaign)
+
+        if self._kafka_enabled:
+            # ── Kafka path: publish event and return immediately ──
+            await self._publish_campaign_event(campaign, actor_id=actor_id)
+            logger.info(
+                "Campaign %s queued to Kafka for async processing", campaign.id
+            )
+            return campaign
+        else:
+            # ── Fallback: synchronous dispatch (NullProvider / dev mode) ──
+            return await self._execute_sync(campaign, sender, template, actor_id=actor_id, ip=ip)
+
+    @property
+    def _kafka_enabled(self) -> bool:
+        from app.core.config import settings
+        return settings.KAFKA_ENABLED
+
+    async def _publish_campaign_event(self, campaign: SmsCampaign, *, actor_id=None) -> None:
+        """Publish sms.campaign.created event to Kafka."""
+        from app.core.kafka import KafkaTopics, get_producer
+        producer = await get_producer()
+        await producer.produce(
+            KafkaTopics.SMS_CAMPAIGN_CREATED,
+            key=str(campaign.company_id),
+            value={
+                "campaign_id": str(campaign.id),
+                "company_id": str(campaign.company_id),
+                "actor_id": str(actor_id) if actor_id else None,
+            },
+        )
+
+    # ===================================================================== #
+    # Synchronous execution fallback (original flow)
+    # ===================================================================== #
+    async def _execute_sync(self, campaign: SmsCampaign, sender, template, *, actor_id=None, ip=None) -> SmsCampaign:
+        """Synchronous campaign execution — used when Kafka is disabled."""
         company_name = await self._company_name()
 
-        await self.campaigns.update(campaign, status=SmsCampaignStatus.PROCESSING.value)
-
-        # Freeze recipients from the campaign source (dedupe + snapshot).
+        # Freeze recipients
         if campaign.source_type == SmsCampaignSource.CONTACT_LIST.value:
             resolved = await self.resolver.resolve(
                 source_type=campaign.source_type,
@@ -228,8 +268,6 @@ class SmsCampaignService:
                 for r in resolved
             ])
         else:
-            # Contacts source: re-resolve from the snapshotted contact_ids to
-            # refresh phone/name, then rewrite the frozen rows.
             existing = await self.recipients.all_for_campaign(campaign.id)
             contact_ids = [r.contact_id for r in existing if r.contact_id is not None]
             resolved = await self.resolver.resolve(
@@ -242,7 +280,7 @@ class SmsCampaignService:
                 for r in resolved
             ])
 
-        # Dispatch per recipient; persist one message each.
+        # Dispatch per recipient
         sent = delivered = failed = 0
         now = datetime.now(timezone.utc)
         message_rows = []
@@ -261,8 +299,8 @@ class SmsCampaignService:
                 "company_id": campaign.company_id,
                 "campaign_id": campaign.id,
                 "recipient_phone": r.phone_e164,
-                "sender_id": sender.sender_id,  # snapshot of sender label
-                "content": content,             # snapshot of rendered body
+                "sender_id": sender.sender_id,
+                "content": content,
                 "status": result.status,
                 "error_details": result.error_details,
                 "provider_message_id": result.provider_message_id,
@@ -290,11 +328,6 @@ class SmsCampaignService:
             sent_count=sent,
             delivered_count=delivered,
             failed_count=failed,
-        )
-        await self.audit.record(
-            action="send", entity_type=_ENTITY, entity_id=campaign.id,
-            actor_id=actor_id, company_id=campaign.company_id, ip_address=ip,
-            new_values={"total": total, "sent": sent, "delivered": delivered, "failed": failed},
         )
         await self.session.commit()
         await self.session.refresh(campaign)
@@ -343,9 +376,6 @@ class SmsCampaignService:
         )).scalar_one_or_none()
 
     async def _freeze_contacts(self, campaign: SmsCampaign, contact_ids):
-        """Snapshot an individual-contacts selection as recipient rows (deduped
-        by phone). Re-resolved/refreshed at send so the snapshot stays current
-        for drafts while preserving historical integrity once sent."""
         resolved = await self.resolver.resolve(
             source_type=SmsCampaignSource.CONTACTS.value,
             source_list_id=None,

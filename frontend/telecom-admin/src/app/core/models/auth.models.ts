@@ -27,6 +27,22 @@ export interface LoginRequest {
   password: string;
 }
 
+/** Payload for public company self-registration (POST /registration). */
+export interface CompanyRegistrationRequest {
+  company_name: string;
+  admin_first_name: string;
+  admin_last_name?: string | null;
+  admin_email: string;
+  password: string;
+  contact_phone?: string | null;
+}
+
+/** Response from POST /registration. */
+export interface RegistrationResult {
+  status: string;
+  message: string;
+}
+
 /** Standard error envelope returned by the API. */
 export interface ApiErrorDetail {
   code: string;

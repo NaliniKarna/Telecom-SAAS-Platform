@@ -6,8 +6,10 @@ import { Observable, switchMap, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Permission, RoleName } from '../constants/rbac.constants';
 import {
+  CompanyRegistrationRequest,
   CurrentUser,
   LoginRequest,
+  RegistrationResult,
   TokenResponse,
 } from '../models/auth.models';
 import { NotificationService } from './notification.service';
@@ -108,7 +110,8 @@ export class AuthService {
       );
   }
 
-  /** Logout: best-effort server revoke, then clear local state and redirect. */
+  /** Logout: best-effort server revoke, then clear local state and return to
+   * the public landing page. */
   logout(): void {
     const refresh_token = this.tokens.refreshToken;
     if (refresh_token) {
@@ -117,7 +120,7 @@ export class AuthService {
         .subscribe({ error: () => void 0 });
     }
     this.clearSession();
-    void this.router.navigate(['/auth/login']);
+    void this.router.navigate(['/landing']);
   }
 
   clearSession(): void {
@@ -207,6 +210,19 @@ export class AuthService {
 
   verifyEmail(token: string): Observable<void> {
     return this.http.post<void>(`${this.baseUrl}/verify-email`, { token });
+  }
+
+  /**
+   * Public company self-registration. Posts to /registration (not /auth): the
+   * backend creates a pending-approval company + a pending company_admin and
+   * emails a verification link. No session is created — the user verifies their
+   * email, then a super admin approves before they can sign in.
+   */
+  registerCompany(payload: CompanyRegistrationRequest): Observable<RegistrationResult> {
+    return this.http.post<RegistrationResult>(
+      `${environment.apiBaseUrl}/registration`,
+      payload,
+    );
   }
 
   resendVerification(): Observable<{ message: string }> {

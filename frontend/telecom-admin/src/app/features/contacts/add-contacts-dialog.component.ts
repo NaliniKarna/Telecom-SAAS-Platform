@@ -28,7 +28,7 @@ import { ContactListItem } from './contact.models';
             <mat-checkbox [checked]="selected().has(c.id)" (change)="toggle(c.id)" [disabled]="data.existing.includes(c.id)" />
             <span class="row__name">{{ name(c) }}</span>
             <span class="row__sub">{{ c.mobile_e164 ?? c.email ?? '' }}</span>
-            @if (data.existing.includes(c.id)) { <span class="row__tag">already in list</span> }
+            @if (data.existing.includes(c.id)) { <span class="row__tag">already in group</span> }
           </label>
         } @empty { @if (!loading()) { <p class="muted">No contacts found.</p> } }
       </div>

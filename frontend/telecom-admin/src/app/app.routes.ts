@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 
-import { authGuard, guestGuard } from './core/guards/auth.guard';
+import { authGuard, guestGuard, rootEntryGuard } from './core/guards/auth.guard';
 import {
   landingRedirectGuard,
   permissionGuard,
@@ -8,12 +8,33 @@ import {
 } from './core/guards/rbac.guard';
 import { Permission, RoleName } from './core/constants/rbac.constants';
 
-/**
- * Top-level routing. Two shells: AuthLayout for public pages, MainLayout for
- * the authenticated app. Feature areas are lazy-loaded; the routes below are
- * the foundation. Feature module routes plug in under MainLayout's children.
- */
 export const routes: Routes = [
+  {
+    path: '',
+    pathMatch: 'full',
+    canActivate: [rootEntryGuard],
+    children: [],
+  },
+  {
+    path: 'landing',
+    canActivate: [guestGuard],
+    loadComponent: () =>
+      import('./features/landing/landing.component').then(
+        (m) => m.LandingComponent,
+      ),
+  },
+  {
+    path: 'solutions/:slug',
+    loadComponent: () =>
+      import('./features/solutions/solution-page.component').then(
+        (m) => m.SolutionPageComponent,
+      ),
+  },
+  {
+    path: 'docs',
+    loadComponent: () =>
+      import('./features/docs/docs.component').then((m) => m.DocsComponent),
+  },
   {
     path: 'auth',
     canActivate: [guestGuard],
@@ -27,6 +48,13 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/auth/login.component').then(
             (m) => m.LoginComponent,
+          ),
+      },
+      {
+        path: 'register',
+        loadComponent: () =>
+          import('./features/auth/register-company.component').then(
+            (m) => m.RegisterCompanyComponent,
           ),
       },
       {
@@ -122,6 +150,14 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/settings/settings.component').then(
             (m) => m.PlatformSettingsComponent,
+          ),
+      },
+      {
+        path: 'telephony',
+        canActivate: [roleGuard([RoleName.SuperAdmin])],
+        loadComponent: () =>
+          import('./features/telephony/telephony.component').then(
+            (m) => m.TelephonyComponent,
           ),
       },
       {
@@ -246,17 +282,93 @@ export const routes: Routes = [
           },
         ],
       },
+      // ---- Voice module ----
       {
-        // Super-admin sender ID approval queue (cross-company). Company admins
-        // create sender IDs but cannot approve their own.
+        path: 'voice',
+        canActivate: [permissionGuard([Permission.VoiceRead])],
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
+          {
+            path: 'dashboard',
+            loadComponent: () =>
+              import('./features/voice/voice-dashboard.component').then(
+                (m) => m.VoiceDashboardComponent,
+              ),
+          },
+          {
+            path: 'extensions',
+            loadComponent: () =>
+              import('./features/voice/voice-extensions.component').then(
+                (m) => m.VoiceExtensionsComponent,
+              ),
+          },
+          {
+            path: 'dialer',
+            canActivate: [permissionGuard([Permission.VoiceDial])],
+            loadComponent: () =>
+              import('./features/voice/voice-dialer.component').then(
+                (m) => m.VoiceDialerComponent,
+              ),
+          },
+          {
+            path: 'active',
+            loadComponent: () =>
+              import('./features/voice/voice-active-calls.component').then(
+                (m) => m.VoiceActiveCallsComponent,
+              ),
+          },
+          {
+            path: 'calls',
+            loadComponent: () =>
+              import('./features/voice/voice-call-history.component').then(
+                (m) => m.VoiceCallHistoryComponent,
+              ),
+          },
+          {
+            path: 'analytics',
+            loadComponent: () =>
+              import('./features/voice/voice-analytics.component').then(
+                (m) => m.VoiceAnalyticsComponent,
+              ),
+          },
+        ],
+      },
+      // ---- Missed Call module ----
+      {
+        path: 'missed-calls',
+        canActivate: [permissionGuard([Permission.MissedCallRead])],
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
+          {
+            path: 'dashboard',
+            loadComponent: () =>
+              import('./features/missed-calls/missed-call-dashboard.component').then(
+                (m) => m.MissedCallDashboardComponent,
+              ),
+          },
+          {
+            path: 'list',
+            loadComponent: () =>
+              import('./features/missed-calls/missed-call-list.component').then(
+                (m) => m.MissedCallListComponent,
+              ),
+          },
+          {
+            path: ':id',
+            loadComponent: () =>
+              import('./features/missed-calls/missed-call-detail.component').then(
+                (m) => m.MissedCallDetailComponent,
+              ),
+          },
+        ],
+      },
+      {
         path: 'sms-approvals',
         canActivate: [roleGuard([RoleName.SuperAdmin])],
         loadComponent: () =>
           import('./features/sms/sms-sender-approvals.component').then((m) => m.SmsSenderApprovalsComponent),
       },
       {
-        // Available to every authenticated user (super admin, company admin,
-        // company user). No permission guard — just an authenticated session.
         path: 'profile',
         loadComponent: () =>
           import('./features/profile/profile.component').then(
@@ -307,8 +419,6 @@ export const routes: Routes = [
           },
         ],
       },
-      // Feature module routes (companies, users, api-keys, audit-logs) mount
-      // here, each guarded with permissionGuard([...]) per the RBAC contract.
       {
         path: 'audit-logs',
         canActivate: [permissionGuard([Permission.AuditRead])],
@@ -317,7 +427,6 @@ export const routes: Routes = [
             (m) => m.AuditLogListComponent,
           ),
       },
-      // Root index: send the user to their role-based landing route.
       { path: '', pathMatch: 'full', canActivate: [landingRedirectGuard], children: [] },
     ],
   },
@@ -328,5 +437,5 @@ export const routes: Routes = [
         (m) => m.ForbiddenComponent,
       ),
   },
-  { path: '**', redirectTo: 'dashboard' },
+  { path: '**', redirectTo: '' },
 ];

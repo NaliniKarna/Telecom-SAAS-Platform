@@ -37,6 +37,13 @@ export enum Permission {
   SmsManage = 'sms.manage',
   SmsSend = 'sms.send',
   SmsAnalytics = 'sms.analytics',
+  // Voice
+  VoiceRead = 'voice.read',
+  VoiceManage = 'voice.manage',
+  VoiceDial = 'voice.dial',
+  // Missed Calls
+  MissedCallRead = 'missed_call.read',
+  MissedCallManage = 'missed_call.manage',
   // Audit & stats
   AuditRead = 'audit.read',
   StatsRead = 'stats.read',

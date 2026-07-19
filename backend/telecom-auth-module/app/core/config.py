@@ -23,9 +23,7 @@ class Settings(BaseSettings):
     )
 
     # --- Dev-only DB bootstrap (NEVER honored in production) ---
-    # Auto-create tables from the ORM models on startup. Opt-in, local only.
     DEV_AUTO_CREATE_DB: bool = False
-    # Run the seed (roles/permissions/super admin) after auto-create.
     DEV_AUTO_SEED: bool = False
     DEV_SEED_ADMIN_EMAIL: str = "admin@platform.local"
     DEV_SEED_ADMIN_PASSWORD: str = "ChangeMe123!"
@@ -36,11 +34,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30
-    INVITE_TOKEN_EXPIRE_MINUTES: int = 4320  # 72h — invites are clicked later
+    INVITE_TOKEN_EXPIRE_MINUTES: int = 4320  # 72h
     EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 1440  # 24h
 
     # --- Email / SMTP ---
-    # When False (default), emails are logged instead of sent (local dev).
     EMAIL_ENABLED: bool = False
     SMTP_HOST: str = "localhost"
     SMTP_PORT: int = 587
@@ -48,7 +45,6 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = "no-reply@telecom.local"
     SMTP_USE_TLS: bool = True
-    # Base URL of the Angular app, used to build links in emails.
     FRONTEND_BASE_URL: str = "http://localhost:4200"
 
     # --- Password policy ---
@@ -61,18 +57,37 @@ class Settings(BaseSettings):
     # --- CORS ---
     CORS_ORIGINS: List[str] = ["http://localhost:4200"]
 
-    # --- File storage (uploads) ---
-    # Local-disk dev backend. UPLOAD_DIR is where files are written; they are
-    # served as static files at UPLOAD_URL_BASE. Swap app/core/storage.py for an
-    # object-store backend (S3/MinIO/R2) in production without touching callers.
+    # --- File storage ---
     UPLOAD_DIR: str = "uploads"
     UPLOAD_URL_BASE: str = "/uploads"
     MAX_UPLOAD_BYTES: int = 2 * 1024 * 1024  # 2 MB
 
+    # --- Telephony / Asterisk ---
+    TELEPHONY_PROVIDER: str = "null"
+    TELEPHONY_CONNECT_TIMEOUT: int = 5
+
+    # --- Kafka (platform event bus) ---
+    # Set to a real broker address to enable async processing.
+    # With "localhost:9092" (default) and no broker running, the producer
+    # falls back to NullProducer mode (logs messages, no network I/O).
+    KAFKA_BOOTSTRAP_SERVERS: str = "localhost:9092"
+    KAFKA_ENABLED: bool = False  # flip to True once Kafka is running
+
+    # --- SMS Forwarding API ---
+    # The standalone microservice that communicates with AkashSMS gateway.
+    # The platform NEVER contacts AkashSMS directly — only via this API.
+    SMS_FORWARDING_API_URL: str = "http://localhost:8001"
+    SMS_FORWARDING_API_KEY: str = ""
+
+    # --- SMS Provider ---
+    # "null" = NullSmsProvider (simulation, default — no SMS sent).
+    # "akashsms" = AkashSmsProvider (calls SMS Forwarding API).
+    # Switch to "akashsms" once the Forwarding API is running.
+    SMS_PROVIDER: str = "null"
+
     @field_validator("JWT_SECRET_KEY")
     @classmethod
     def _secret_must_be_set_in_prod(cls, v: str, info) -> str:
-        # Hard fail if a real deployment forgot to set the secret.
         env = (info.data or {}).get("ENVIRONMENT", "development")
         if env == "production" and v == "CHANGE_ME_IN_PRODUCTION":
             raise ValueError("JWT_SECRET_KEY must be set in production")
