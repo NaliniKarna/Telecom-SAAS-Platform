@@ -211,7 +211,7 @@ import { CompanyDashboardOverview, DashboardOverview } from './dashboard.models'
           </div>
           <div class="kpi">
             <span class="kpi__value">{{ d.kpis.total_contact_lists }}</span>
-            <span class="kpi__label">Contact Lists</span>
+            <span class="kpi__label">Contact Groups</span>
           </div>
           <div class="kpi">
             <span class="kpi__value">{{ d.kpis.total_sms_campaigns }}</span>

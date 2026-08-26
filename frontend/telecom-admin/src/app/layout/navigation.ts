@@ -35,7 +35,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: 'Contact Groups', icon: 'format_list_bulleted', route: '/contact-lists', permissions: [Permission.ContactRead], hideForSuperAdmin: true },
     ],
   },
-  
+  { label: 'Company Settings', icon: 'business', route: '/company-settings', permissions: [Permission.CompanyRead], hideForSuperAdmin: true },
 
   // ---- SMS (collapsible) ----
   {
@@ -73,6 +73,4 @@ export const NAV_ITEMS: NavItem[] = [
       { label: 'All Missed Calls', icon: 'list', route: '/missed-calls/list', permissions: [Permission.MissedCallRead], hideForSuperAdmin: true },
     ],
   },
-
-  { label: 'Company Settings', icon: 'business', route: '/company-settings', permissions: [Permission.CompanyRead], hideForSuperAdmin: true },
 ];
