@@ -6,6 +6,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog } from '@angular/material/dialog';
 
 import { ApiKeyService } from './api-key.service';
@@ -19,7 +20,7 @@ import { NotificationService } from '../../core/services/notification.service';
   standalone: true,
   imports: [
     DatePipe, MatCardModule, MatTableModule, MatButtonModule, MatIconModule,
-    MatProgressBarModule, MatMenuModule,
+    MatProgressBarModule, MatMenuModule, MatTooltipModule,
   ],
   template: `
     <header class="page-header">
@@ -67,6 +68,18 @@ import { NotificationService } from '../../core/services/notification.service';
             <th mat-header-cell *matHeaderCellDef>Expires</th>
             <td mat-cell *matCellDef="let k">{{ k.expires_at ? (k.expires_at | date: 'mediumDate') : 'Never' }}</td>
           </ng-container>
+          <ng-container matColumnDef="ipWhitelist">
+            <th mat-header-cell *matHeaderCellDef>IP whitelist</th>
+            <td mat-cell *matCellDef="let k">
+              @if (k.ip_whitelist?.length) {
+                <span class="ip-chips" [matTooltip]="k.ip_whitelist.join(', ')">
+                  {{ k.ip_whitelist.length }} {{ k.ip_whitelist.length === 1 ? 'entry' : 'entries' }}
+                </span>
+              } @else {
+                <span class="ip-any">Any IP</span>
+              }
+            </td>
+          </ng-container>
           <ng-container matColumnDef="actions">
             <th mat-header-cell *matHeaderCellDef></th>
             <td mat-cell *matCellDef="let k">
@@ -96,6 +109,8 @@ import { NotificationService } from '../../core/services/notification.service';
       .chip--active { background: var(--mat-sys-primary-container); color: var(--mat-sys-on-primary-container); }
       .chip--revoked { background: var(--mat-sys-error-container); color: var(--mat-sys-on-error-container); }
       .chip--expired { background: var(--mat-sys-surface-container-highest); color: var(--mat-sys-on-surface-variant); }
+      .ip-chips { font-family: monospace; font-size: 0.8rem; border-bottom: 1px dashed var(--mat-sys-on-surface-variant); cursor: default; }
+      .ip-any { color: var(--mat-sys-on-surface-variant); font-size: 0.85rem; }
       .empty { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 3rem; color: var(--mat-sys-on-surface-variant); }
       .empty mat-icon { font-size: 2.5rem; width: 2.5rem; height: 2.5rem; opacity: 0.5; }
     `,
@@ -106,7 +121,7 @@ export class ApiKeyListComponent {
   private readonly dialog = inject(MatDialog);
   private readonly notify = inject(NotificationService);
 
-  readonly cols = ['name', 'status', 'usage', 'lastUsed', 'expires', 'actions'];
+  readonly cols = ['name', 'status', 'usage', 'lastUsed', 'expires', 'ipWhitelist', 'actions'];
   readonly rows = signal<ApiKey[]>([]);
   readonly loading = signal(false);
 

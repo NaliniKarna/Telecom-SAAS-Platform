@@ -21,6 +21,12 @@ import { NotificationService } from '../../core/services/notification.service';
         <code>{{ data.api_key }}</code>
         <button mat-icon-button (click)="copy()" aria-label="Copy"><mat-icon>content_copy</mat-icon></button>
       </div>
+      @if (data.ip_whitelist?.length) {
+        <div class="ip-summary">
+          <mat-icon>shield</mat-icon>
+          <span>Restricted to: {{ data.ip_whitelist!.join(', ') }}</span>
+        </div>
+      }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-flat-button color="primary" (click)="ref.close(true)">Done</button>
@@ -33,6 +39,9 @@ import { NotificationService } from '../../core/services/notification.service';
       .keybox { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 8px;
         background: var(--mat-sys-surface-container-highest); }
       .keybox code { font-family: monospace; word-break: break-all; flex: 1; }
+      .ip-summary { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.75rem;
+        color: var(--mat-sys-on-surface-variant); font-size: 0.85rem; }
+      .ip-summary mat-icon { font-size: 1.1rem; width: 1.1rem; height: 1.1rem; }
     `,
   ],
 })

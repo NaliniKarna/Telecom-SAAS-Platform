@@ -15,6 +15,7 @@ from app.api.v1.deps import (
     require_permission,
 )
 from app.core.constants import Permission
+from app.core.http import client_ip as _client_ip
 from app.models.api_key import ApiKey
 from app.schemas.api_key import ApiKeyCreate, ApiKeyCreated, ApiKeyRead
 from app.services.api_key_service import ApiKeyService, derive_status
@@ -29,13 +30,6 @@ CanGenerate = Annotated[
 CanRevoke = Annotated[
     object, Depends(require_permission(Permission.APIKEY_REVOKE.value))
 ]
-
-
-def _client_ip(request: Request) -> str | None:
-    fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        return fwd.split(",")[0].strip()
-    return request.client.host if request.client else None
 
 
 def _read(key: ApiKey) -> ApiKeyRead:

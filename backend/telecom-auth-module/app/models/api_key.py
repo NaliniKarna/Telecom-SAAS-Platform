@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, String
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -54,6 +55,13 @@ class ApiKey(Base, UUIDPkMixin, TimestampMixin):
     )
     revoked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+    # Optional allowlist of IPs/CIDR ranges. Null/empty = allow any IP.
+    # Enforced by ApiKeyService.is_ip_allowed() once request-authentication
+    # is wired; stored now so the console can manage it ahead of that.
+    ip_whitelist: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String(64)), nullable=True
     )
 
     company: Mapped["Company"] = relationship(lazy="selectin")  # noqa: F821

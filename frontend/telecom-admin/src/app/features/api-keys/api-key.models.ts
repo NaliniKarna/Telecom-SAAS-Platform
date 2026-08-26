@@ -11,6 +11,8 @@ export interface ApiKey {
   usage_count: number;
   revoked_at: string | null;
   created_at: string;
+  /** Allowed IPs/CIDR ranges. Null/empty = allow requests from any IP. */
+  ip_whitelist: string[] | null;
 }
 
 export interface ApiKeyCreated extends ApiKey {
@@ -21,6 +23,7 @@ export interface ApiKeyCreate {
   name: string;
   description?: string | null;
   expires_at?: string | null;
+  ip_whitelist?: string[] | null;
 }
 
 export interface Paginated<T> {
