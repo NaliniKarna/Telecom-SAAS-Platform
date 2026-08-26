@@ -51,3 +51,12 @@ class AccountLockedError(AuthenticationError):
 
 class InactiveAccountError(AuthenticationError):
     error_code = "account_inactive"
+
+
+class CompanyInactiveError(PermissionDeniedError):
+    """The authenticated principal is valid, but its company is not active
+    (suspended/deactivated/pending). Distinct from InactiveAccountError,
+    which is about a human user's own status on an otherwise-active company.
+    """
+
+    error_code = "company_inactive"

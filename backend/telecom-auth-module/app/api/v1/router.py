@@ -12,6 +12,7 @@ from app.api.v1.routes import (
     contact,
     contact_list,
     dashboard,
+    external_sms,
     missed_call,
     platform_settings,
     registration,
@@ -45,3 +46,4 @@ api_router.include_router(telephony.router)
 api_router.include_router(voice.router)
 api_router.include_router(missed_call.router)
 api_router.include_router(registration.router)
+api_router.include_router(external_sms.router)

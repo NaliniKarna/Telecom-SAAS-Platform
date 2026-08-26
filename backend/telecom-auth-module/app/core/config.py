@@ -85,6 +85,26 @@ class Settings(BaseSettings):
     # Switch to "akashsms" once the Forwarding API is running.
     SMS_PROVIDER: str = "null"
 
+    # --- Client IP resolution (trusted proxy hops) ---
+    # How many reverse-proxy hops in front of this app are trusted to have
+    # appended (not spoofed) an entry to X-Forwarded-For. 0 (default) means
+    # the header is NOT trusted at all — the raw socket peer is used, which
+    # is the only safe default when the app might be directly internet-
+    # facing. Set to 1 for a single trusted load balancer / nginx in front,
+    # 2 for e.g. Cloudflare -> nginx -> app, etc. Getting this number wrong
+    # (too high) lets a client spoof its own IP and defeat the API-key IP
+    # whitelist and the rate limiters below.
+    TRUSTED_PROXY_HOPS: int = 0
+
+    # --- API key auth: brute-force / abuse protection ---
+    # In-process only (see app/core/rate_limit.py) — no shared cache exists
+    # in this deployment yet. Does not survive a restart and is NOT shared
+    # across multiple worker processes/replicas; see IMPLEMENTATION-REPORT.
+    API_KEY_AUTH_FAILURE_LIMIT: int = 10          # invalid-key attempts...
+    API_KEY_AUTH_FAILURE_WINDOW_SECONDS: int = 60  # ...allowed per IP within this window...
+    API_KEY_AUTH_LOCKOUT_SECONDS: int = 300        # ...before that IP is locked out for this long.
+    API_KEY_REQUEST_LIMIT_PER_MINUTE: int = 60     # successfully-authenticated requests per key/minute.
+
     @field_validator("JWT_SECRET_KEY")
     @classmethod
     def _secret_must_be_set_in_prod(cls, v: str, info) -> str:

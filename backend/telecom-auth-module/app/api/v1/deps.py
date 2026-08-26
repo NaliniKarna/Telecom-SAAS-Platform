@@ -7,7 +7,11 @@ and exposes parameterized authorization guards.
 from typing import Annotated, Callable
 
 from fastapi import Depends, Request
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import (
+    APIKeyHeader,
+    HTTPAuthorizationCredentials,
+    HTTPBearer,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.audit_service import AuditService
 from app.services.sms_campaign_service import SmsCampaignService
@@ -20,11 +24,20 @@ from app.core.exceptions import (
     InactiveAccountError,
     PermissionDeniedError,
 )
+from app.core.http import client_ip as _request_client_ip
 from app.repositories.company_repository import CompanyRepository
 from app.services.company_settings_service import CompanySettingsService
 from app.services.change_request_service import ChangeRequestService
 from app.services.group_service import GroupService
-from app.services.api_key_service import ApiKeyService
+from app.core.config import settings
+from app.core.rate_limit import api_key_request_limiter, ip_auth_lockout
+from app.services.api_key_service import (
+    ApiKeyContext,
+    ApiKeyService,
+    audit_ip_lockout,
+    audit_key_rate_limited,
+    authenticate_api_key,
+)
 from app.services.contact_service import ContactService
 from app.services.contact_import_service import ContactImportService
 from app.services.telephony_service import TelephonyService
@@ -55,6 +68,7 @@ from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
 
 _bearer = HTTPBearer(auto_error=False)
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 
@@ -102,6 +116,76 @@ async def get_current_user(
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
 CurrentContext = Annotated[TenantContext, Depends(get_tenant_context)]
+
+
+# --------------------------------------------------------------------------- #
+# API-key authentication chain (programmatic access, no human user)
+#
+# Separate from the JWT chain above: the Angular console authenticates with a
+# bearer token; external/programmatic callers authenticate with an X-API-Key
+# header. Only routes that explicitly declare CurrentApiKey accept this
+# scheme — no JWT-protected route (CurrentUser/CurrentContext) is reachable
+# with an API key, and vice versa. This is the live enforcement point for
+# ApiKeyService.is_ip_allowed(), plus abuse protection layered on top:
+#   1. an IP already locked out from repeated invalid-key attempts is
+#      rejected before touching the DB at all,
+#   2. authenticate_api_key() does the real lookup (status + IP whitelist),
+#   3. a failure here counts toward that IP's lockout; a success clears it,
+#   4. a per-key sliding-window limit caps request volume from a *valid* key
+#      (protects against a leaked-but-real key being hammered).
+# See app/core/rate_limit.py for why this is in-process, not Redis-backed.
+# --------------------------------------------------------------------------- #
+async def get_api_key_context(
+    request: Request,
+    db: DbSession,
+    presented_key: Annotated[str | None, Depends(_api_key_header)],
+) -> ApiKeyContext:
+    ip = _request_client_ip(request)
+
+    if ip and await ip_auth_lockout.is_locked(ip):
+        raise PermissionDeniedError(
+            "Too many failed API key attempts from this address. Try again later."
+        )
+
+    if not presented_key:
+        raise AuthenticationError("Missing API key")
+
+    try:
+        ctx = await authenticate_api_key(db, presented_key, client_ip=ip)
+    except AuthenticationError:
+        # Unknown/revoked/expired key — this is exactly the signal a
+        # brute-force/enumeration attempt looks like, so it counts toward
+        # the IP's lockout. IP-whitelist mismatches (PermissionDeniedError,
+        # raised by authenticate_api_key itself) are audited there instead
+        # and don't count here — that's a valid key from an unexpected
+        # place, not credential guessing.
+        if ip:
+            just_locked = await ip_auth_lockout.register_failure(
+                ip,
+                limit=settings.API_KEY_AUTH_FAILURE_LIMIT,
+                window_seconds=settings.API_KEY_AUTH_FAILURE_WINDOW_SECONDS,
+                lockout_seconds=settings.API_KEY_AUTH_LOCKOUT_SECONDS,
+            )
+            if just_locked:
+                await audit_ip_lockout(db, ip)
+        raise
+
+    if ip:
+        await ip_auth_lockout.register_success(ip)
+
+    allowed = await api_key_request_limiter.allow(
+        str(ctx.key_id),
+        limit=settings.API_KEY_REQUEST_LIMIT_PER_MINUTE,
+        window_seconds=60,
+    )
+    if not allowed:
+        await audit_key_rate_limited(db, ctx, ip)
+        raise PermissionDeniedError("API key request rate limit exceeded")
+
+    return ctx
+
+
+CurrentApiKey = Annotated[ApiKeyContext, Depends(get_api_key_context)]
 
 
 # --------------------------------------------------------------------------- #
