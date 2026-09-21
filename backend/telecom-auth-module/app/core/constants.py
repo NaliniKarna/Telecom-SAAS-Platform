@@ -72,6 +72,18 @@ class SmsTemplateStatus(str, enum.Enum):
     INACTIVE = "inactive"
 
 
+class VoiceStatus(str, enum.Enum):
+    """Status of an entry in the AI Voice voice library."""
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+
+
+class VoiceTemplateStatus(str, enum.Enum):
+    """Status of a tenant's Voice Template (mirrors SmsTemplateStatus)."""
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+
+
 class SmsCampaignStatus(str, enum.Enum):
     DRAFT = "draft"
     SCHEDULED = "scheduled"
@@ -219,6 +231,12 @@ class Permission(str, enum.Enum):
     MISSED_CALL_READ = "missed_call.read"
     MISSED_CALL_MANAGE = "missed_call.manage"
 
+    # AI Voice / TTS foundation (voices, voice templates, TTS preview —
+    # NOT voice campaigns; that's a later phase)
+    AI_VOICE_READ = "ai_voice.read"
+    AI_VOICE_MANAGE = "ai_voice.manage"
+    AI_VOICE_PREVIEW = "ai_voice.preview"
+
 
 # Role -> permission mapping. Super admin is handled as a wildcard at check time.
 ROLE_PERMISSIONS: dict[RoleName, set[Permission]] = {
@@ -248,10 +266,14 @@ ROLE_PERMISSIONS: dict[RoleName, set[Permission]] = {
         Permission.VOICE_DIAL,
         Permission.MISSED_CALL_READ,
         Permission.MISSED_CALL_MANAGE,
+        Permission.AI_VOICE_READ,
+        Permission.AI_VOICE_MANAGE,
+        Permission.AI_VOICE_PREVIEW,
     },
     RoleName.COMPANY_USER: {
         Permission.USER_READ,
         Permission.VOICE_READ,
         Permission.MISSED_CALL_READ,
+        Permission.AI_VOICE_READ,
     },
 }

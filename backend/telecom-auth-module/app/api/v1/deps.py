@@ -244,6 +244,16 @@ def get_sms_campaign_service(db: DbSession, ctx: CurrentContext) -> "SmsCampaign
 def get_sms_analytics_service(db: DbSession, ctx: CurrentContext) -> "SmsAnalyticsService":
     return SmsAnalyticsService(db, ctx, AuditService(db))
 
+
+def get_ai_voice_service(db: DbSession, ctx: CurrentContext) -> "AiVoiceService":
+    from app.services.ai_voice_service import AiVoiceService
+    return AiVoiceService(db, ctx, AuditService(db))
+
+
+def get_voice_template_service(db: DbSession, ctx: CurrentContext) -> "VoiceTemplateService":
+    from app.services.ai_voice_service import VoiceTemplateService
+    return VoiceTemplateService(db, ctx, AuditService(db))
+
 def get_user_management_service(
     db: DbSession, ctx: CurrentContext
 ) -> "UserManagementService":

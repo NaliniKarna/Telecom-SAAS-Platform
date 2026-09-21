@@ -18,6 +18,7 @@ from app.models.sms import (
 )
 from app.models.telephony import TelephonyConnection
 from app.models.voice import VoiceCallLog, VoiceExtension
+from app.models.ai_voice import AiVoice, TtsPreview, VoiceTemplate
 from app.models.missed_call import MissedCall, MissedCallCallback, MissedCallNote
 from app.models.user import User, UserRole
 
@@ -36,6 +37,9 @@ __all__ = [
     "TelephonyConnection",
     "VoiceExtension",
     "VoiceCallLog",
+    "AiVoice",
+    "VoiceTemplate",
+    "TtsPreview",
     "MissedCall",
     "MissedCallNote",
     "MissedCallCallback",

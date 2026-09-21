@@ -105,6 +105,22 @@ class Settings(BaseSettings):
     API_KEY_AUTH_LOCKOUT_SECONDS: int = 300        # ...before that IP is locked out for this long.
     API_KEY_REQUEST_LIMIT_PER_MINUTE: int = 60     # successfully-authenticated requests per key/minute.
 
+    # --- TTS Provider (AI Voice foundation) ---
+    # "null"       = NullTTSProvider (simulation — writes a tiny silent/tone
+    #                WAV, no network I/O, no API key required). Default.
+    # "elevenlabs" = ElevenLabsTTSProvider (calls the ElevenLabs API).
+    TTS_PROVIDER: str = "null"
+    ELEVENLABS_API_KEY: str = ""
+    ELEVENLABS_MODEL_ID: str = "eleven_multilingual_v2"
+    # Default Nepali-capable voice, carried over from the nepali-tts reference
+    # project. Per-request/per-template voice selection overrides this.
+    ELEVENLABS_DEFAULT_VOICE_ID: str = "cgSgspJ2msm6clMCkdW9"
+    ELEVENLABS_API_BASE_URL: str = "https://api.elevenlabs.io"
+    # Off by default — see app/services/tts_service.py::_normalize_for_telephony
+    # for why this requires an optional dependency (pydub + ffmpeg) and isn't
+    # forced on for this preview-only phase.
+    TTS_NORMALIZE_FOR_TELEPHONY: bool = False
+
     @field_validator("JWT_SECRET_KEY")
     @classmethod
     def _secret_must_be_set_in_prod(cls, v: str, info) -> str:

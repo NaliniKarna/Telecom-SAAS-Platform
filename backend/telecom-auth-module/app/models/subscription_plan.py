@@ -55,6 +55,14 @@ class SubscriptionPlan(Base, UUIDPkMixin, TimestampMixin, SoftDeleteMixin):
     default_api_access_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
+    # AI Voice / TTS foundation. Deliberately just the gate for now — usage
+    # limits (chars/month, voice count) are NOT added here yet because
+    # nothing in this phase tracks or enforces usage; adding unenforced limit
+    # columns would be speculative schema. Add them alongside the first
+    # feature that actually consumes them (Voice Campaigns / usage metering).
+    default_ai_voice_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
 
     # Attribution (nullable: seed/system rows and pre-existing plans have none).
     created_by: Mapped[uuid.UUID | None] = mapped_column(

@@ -44,6 +44,10 @@ export enum Permission {
   // Missed Calls
   MissedCallRead = 'missed_call.read',
   MissedCallManage = 'missed_call.manage',
+  // AI Voice / TTS foundation
+  AiVoiceRead = 'ai_voice.read',
+  AiVoiceManage = 'ai_voice.manage',
+  AiVoicePreview = 'ai_voice.preview',
   // Audit & stats
   AuditRead = 'audit.read',
   StatsRead = 'stats.read',

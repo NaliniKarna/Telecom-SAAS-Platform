@@ -63,6 +63,12 @@ class Company(Base, UUIDPkMixin, TimestampMixin, SoftDeleteMixin):
     freepbx_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
+    # AI Voice / TTS foundation entitlement (Voices, Voice Templates, TTS
+    # preview). Mirrors the sms_enabled/voice_enabled override pattern above;
+    # not yet enforced by usage-limit fields — see SubscriptionPlan for why.
+    ai_voice_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
 
     # --- per-tenant limits (NULL = unlimited / inherit) ---
     max_users: Mapped[int | None] = mapped_column(Integer, nullable=True)

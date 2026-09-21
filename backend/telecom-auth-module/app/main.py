@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.error_handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.db.init_dev_db import init_dev_db
+from app.db.sync_default_voice import sync_default_elevenlabs_voice
 from app.middleware.request_context import RequestContextMiddleware
 
 
@@ -20,6 +21,9 @@ async def lifespan(app: FastAPI):
     # Dev-only convenience: create tables from models if explicitly enabled.
     # No-op in production and unless DEV_AUTO_CREATE_DB is set. Not a migration.
     await init_dev_db()
+    # Wires ELEVENLABS_DEFAULT_VOICE_ID -> the seeded voice row. Safe in every
+    # environment: no-ops unless TTS_PROVIDER=elevenlabs, never raises.
+    await sync_default_elevenlabs_voice()
     yield
 
 

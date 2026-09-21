@@ -73,4 +73,14 @@ export const NAV_ITEMS: NavItem[] = [
       { label: 'All Missed Calls', icon: 'list', route: '/missed-calls/list', permissions: [Permission.MissedCallRead], hideForSuperAdmin: true },
     ],
   },
+
+  // ---- AI Voice (collapsible) ----
+  {
+    label: 'AI Voice', icon: 'record_voice_over',
+    permissions: [Permission.AiVoiceRead], hideForSuperAdmin: true,
+    children: [
+      { label: 'Voices', icon: 'graphic_eq', route: '/ai-voice/voices', permissions: [Permission.AiVoiceRead], hideForSuperAdmin: true },
+      { label: 'Voice Templates', icon: 'description', route: '/ai-voice/templates', permissions: [Permission.AiVoiceRead], hideForSuperAdmin: true },
+    ],
+  },
 ];

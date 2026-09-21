@@ -5,6 +5,7 @@ on the shared session so it commits atomically with the action being audited
 (same unit of work). Callers pass the actor/company/IP context.
 """
 import ipaddress
+import json
 import logging
 from typing import Any, Optional
 
@@ -35,6 +36,27 @@ def _valid_inet(value: Optional[str]) -> Optional[str]:
         return None
 
 
+def _json_safe(value: Optional[dict]) -> Optional[dict]:
+    """AuditLog.old_values/new_values are Postgres JSONB columns. Callers
+    build these dicts from Pydantic's model_dump(), which by default keeps
+    native Python types (UUID, datetime, Decimal, enums that aren't str
+    subclasses, ...) rather than JSON-primitive ones — and the stdlib JSON
+    encoder used for JSONB has no idea how to serialize a UUID, which turns
+    the whole request into an unhandled 500 (found via a real "edit voice
+    template, change the voice" request: `voice_id` stayed a `uuid.UUID`
+    object all the way into this dict).
+
+    Round-tripping through json.dumps(..., default=str) is a blunt but
+    reliable fix: anything already JSON-safe passes through unchanged,
+    anything that isn't gets stringified instead of crashing the write.
+    Audit values are for a human reading a log, not for round-tripping back
+    into typed objects, so stringifying is the right trade-off here.
+    """
+    if value is None:
+        return None
+    return json.loads(json.dumps(value, default=str))
+
+
 class AuditService:
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -59,8 +81,8 @@ class AuditService:
             actor_id=actor_id,
             company_id=company_id,
             description=description,
-            old_values=old_values,
-            new_values=new_values,
+            old_values=_json_safe(old_values),
+            new_values=_json_safe(new_values),
             ip_address=_valid_inet(ip_address),
         )
         self.session.add(entry)

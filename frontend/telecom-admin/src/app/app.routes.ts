@@ -363,6 +363,29 @@ export const routes: Routes = [
         ],
       },
       {
+        path: 'ai-voice',
+        canActivate: [permissionGuard([Permission.AiVoiceRead])],
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'templates' },
+          {
+            path: 'voices',
+            loadComponent: () =>
+              import('./features/ai-voice/voice-list.component').then((m) => m.VoiceListComponent),
+          },
+          {
+            path: 'templates',
+            loadComponent: () =>
+              import('./features/ai-voice/voice-template-list.component').then((m) => m.VoiceTemplateListComponent),
+          },
+          {
+            path: 'templates/:id/preview',
+            canActivate: [permissionGuard([Permission.AiVoicePreview])],
+            loadComponent: () =>
+              import('./features/ai-voice/voice-template-preview.component').then((m) => m.VoiceTemplatePreviewComponent),
+          },
+        ],
+      },
+      {
         path: 'sms-approvals',
         canActivate: [roleGuard([RoleName.SuperAdmin])],
         loadComponent: () =>
