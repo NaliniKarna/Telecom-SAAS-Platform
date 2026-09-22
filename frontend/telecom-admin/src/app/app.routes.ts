@@ -153,6 +153,29 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'registration/pending',
+        canActivate: [roleGuard([RoleName.SuperAdmin])],
+        loadComponent: () =>
+          import('./features/registration/pending-registrations.component').then((m) => m.PendingRegistrationsComponent),
+      },
+      {
+        path: 'admin/ai-voice',
+        canActivate: [roleGuard([RoleName.SuperAdmin])],
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'voices' },
+          {
+            path: 'voices',
+            loadComponent: () =>
+              import('./features/admin-ai-voice/admin-voice-list.component').then((m) => m.AdminVoiceListComponent),
+          },
+          {
+            path: 'preview',
+            loadComponent: () =>
+              import('./features/admin-ai-voice/admin-tts-preview.component').then((m) => m.AdminTtsPreviewComponent),
+          },
+        ],
+      },
+      {
         path: 'telephony',
         canActivate: [roleGuard([RoleName.SuperAdmin])],
         loadComponent: () =>

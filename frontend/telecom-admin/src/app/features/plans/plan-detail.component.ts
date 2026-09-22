@@ -6,8 +6,12 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { FormsModule } from '@angular/forms';
 
 import { PlansService } from './plans.service';
+import { AdminAiVoiceService } from '../admin-ai-voice/admin-ai-voice.service';
+import { AdminVoice } from '../admin-ai-voice/admin-ai-voice.models';
 import { SubscriptionPlan } from './plan.models';
 import { NotificationService } from '../../core/services/notification.service';
 import {
@@ -26,6 +30,8 @@ import {
     MatIconModule,
     MatProgressBarModule,
     MatDialogModule,
+    MatCheckboxModule,
+    FormsModule,
   ],
   template: `
     @if (loading()) {
@@ -86,7 +92,30 @@ import {
             <span class="ent ent--{{ p.default_missed_call_enabled }}">Missed Call</span>
             <span class="ent ent--{{ p.default_freepbx_enabled }}">FreePBX</span>
             <span class="ent ent--{{ p.default_api_access_enabled }}">API Access</span>
+            <span class="ent ent--{{ p.default_ai_voice_enabled }}">AI Voice</span>
           </div>
+
+          @if (p.default_ai_voice_enabled) {
+            <h2>Allowed AI Voices</h2>
+            @if (loadingVoices()) {
+              <mat-progress-bar mode="indeterminate" />
+            }
+            @if (!loadingVoices() && allVoices().length === 0) {
+              <p class="sub">No active voices exist yet — create one under AI Voice &gt; Voices first.</p>
+            }
+            @if (allVoices().length > 0) {
+              <div class="voice-checklist">
+                @for (v of allVoices(); track v.id) {
+                  <mat-checkbox [checked]="isAllowed(v.id)" (change)="toggleVoice(v.id, $event.checked)">
+                    {{ v.name }} <span class="sub">({{ v.language }})</span>
+                  </mat-checkbox>
+                }
+              </div>
+              <button mat-stroked-button (click)="saveVoices()" [disabled]="savingVoices()">
+                <mat-icon>save</mat-icon> Save allowed voices
+              </button>
+            }
+          }
 
           <h2>Audit</h2>
           <dl class="meta">
@@ -176,6 +205,8 @@ import {
         background: var(--mat-sys-error-container);
         color: var(--mat-sys-on-error-container);
       }
+      .voice-checklist { display: flex; flex-direction: column; gap: .4rem; margin-bottom: .75rem; }
+      .sub { color: var(--mat-sys-on-surface-variant); font-size: .82rem; }
       .back {
         display: inline-block;
         margin-top: 1.5rem;
@@ -187,6 +218,7 @@ import {
 })
 export class PlanDetailComponent {
   private readonly api = inject(PlansService);
+  private readonly voiceApi = inject(AdminAiVoiceService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly notify = inject(NotificationService);
@@ -196,9 +228,14 @@ export class PlanDetailComponent {
   readonly usage = signal(0);
   readonly loading = signal(false);
 
+  readonly allVoices = signal<AdminVoice[]>([]);
+  readonly allowedVoiceIds = signal<Set<string>>(new Set());
+  readonly loadingVoices = signal(false);
+  readonly savingVoices = signal(false);
+
   constructor() {
     const id = this.route.snapshot.paramMap.get('id');
-    if (id) this.load(id);
+    if (id) { this.load(id); this.loadVoices(id); }
   }
 
   load(id: string): void {
@@ -210,6 +247,44 @@ export class PlanDetailComponent {
         this.loading.set(false);
       },
       error: () => this.loading.set(false),
+    });
+  }
+
+  loadVoices(planId: string): void {
+    this.loadingVoices.set(true);
+    this.voiceApi.listVoices({ status: 'active', size: 100 }).subscribe({
+      next: (res) => {
+        this.allVoices.set(res.data);
+        this.voiceApi.getPlanVoices(planId).subscribe({
+          next: (pv) => { this.allowedVoiceIds.set(new Set(pv.voice_ids)); this.loadingVoices.set(false); },
+          error: () => this.loadingVoices.set(false),
+        });
+      },
+      error: () => this.loadingVoices.set(false),
+    });
+  }
+
+  isAllowed(voiceId: string): boolean {
+    return this.allowedVoiceIds().has(voiceId);
+  }
+
+  toggleVoice(voiceId: string, checked: boolean): void {
+    const next = new Set(this.allowedVoiceIds());
+    if (checked) next.add(voiceId); else next.delete(voiceId);
+    this.allowedVoiceIds.set(next);
+  }
+
+  saveVoices(): void {
+    const p = this.plan();
+    if (!p) return;
+    this.savingVoices.set(true);
+    this.voiceApi.setPlanVoices(p.id, [...this.allowedVoiceIds()]).subscribe({
+      next: (pv) => {
+        this.allowedVoiceIds.set(new Set(pv.voice_ids));
+        this.savingVoices.set(false);
+        this.notify.success('Allowed voices updated.');
+      },
+      error: () => { this.savingVoices.set(false); this.notify.error('Unable to update allowed voices.'); },
     });
   }
 

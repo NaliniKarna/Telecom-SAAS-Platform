@@ -1,9 +1,17 @@
-"""AI Voice / TTS foundation endpoints.
+"""AI Voice / TTS foundation endpoints — Company Admin's view.
 
 RBAC:
   - reads (voices, templates)     -> ai_voice.read
   - writes (templates)            -> ai_voice.manage
   - TTS preview generation        -> ai_voice.preview
+
+Voice library here is READ-ONLY. Activating/deactivating a voice and
+curating which voices a subscription plan grants are platform-owned
+actions, moved to app.api.v1.routes.admin_ai_voice (Super Admin only, per
+the ownership rules: "Company Admin must NOT be able to modify
+platform-owned voice/provider configuration"). The voice list below is
+already filtered to what the company's plan actually grants — see
+AiVoiceService / AiVoiceRepository.list_visible_to_company().
 
 Explicitly NOT part of this module (see spec section 15): Voice Campaigns,
 campaign recipients, Kafka publishing, bulk generation, or any PBX call
@@ -21,7 +29,7 @@ from app.api.v1.deps import (
     get_voice_template_service,
     require_permission,
 )
-from app.core.constants import Permission, VoiceStatus
+from app.core.constants import Permission
 from app.core.http import client_ip
 from app.schemas.ai_voice import (
     TtsPreviewRequest,
@@ -53,45 +61,24 @@ def _page(rows, total, page, size, schema):
 
 
 # =========================================================================== #
-# Voice library
+# Voice library (read-only — see module docstring)
 # =========================================================================== #
 @router.get("/voices", response_model=dict)
 async def list_voices(
     service: VoiceSvc, _: CanRead,
-    status_filter: VoiceStatus | None = Query(None, alias="status"),
     page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100),
 ):
-    rows, total = await service.list_voices(
-        status=status_filter, offset=(page - 1) * size, limit=size,
-    )
+    # No status filter exposed here — Company Admin's view is always
+    # active-only (see AiVoiceService.list_voices docstring). Browsing
+    # inactive/unavailable platform voices is a Super Admin concern
+    # (GET /admin/ai-voice/voices).
+    rows, total = await service.list_voices(offset=(page - 1) * size, limit=size)
     return _page(rows, total, page, size, VoiceRead)
 
 
 @router.get("/voices/{voice_id}", response_model=VoiceRead)
 async def get_voice(voice_id: uuid.UUID, service: VoiceSvc, _: CanRead):
     return VoiceRead.model_validate(await service.get_voice(voice_id))
-
-
-@router.post("/voices/{voice_id}/activate", response_model=VoiceRead)
-async def activate_voice(
-    voice_id: uuid.UUID, service: VoiceSvc, current_user: CurrentUser,
-    request: Request, _: CanManage,
-):
-    voice = await service.set_voice_status(
-        voice_id, VoiceStatus.ACTIVE, actor_id=current_user.id, ip=client_ip(request),
-    )
-    return VoiceRead.model_validate(voice)
-
-
-@router.post("/voices/{voice_id}/deactivate", response_model=VoiceRead)
-async def deactivate_voice(
-    voice_id: uuid.UUID, service: VoiceSvc, current_user: CurrentUser,
-    request: Request, _: CanManage,
-):
-    voice = await service.set_voice_status(
-        voice_id, VoiceStatus.INACTIVE, actor_id=current_user.id, ip=client_ip(request),
-    )
-    return VoiceRead.model_validate(voice)
 
 
 # =========================================================================== #

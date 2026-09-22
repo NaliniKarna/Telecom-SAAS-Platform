@@ -14,6 +14,8 @@ export interface SubscriptionPlan {
   default_missed_call_enabled: boolean;
   default_freepbx_enabled: boolean;
   default_api_access_enabled: boolean;
+  default_ai_voice_enabled: boolean;
+  default_monthly_tts_characters: number | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -43,6 +45,8 @@ export interface PlanCreate {
   default_missed_call_enabled?: boolean;
   default_freepbx_enabled?: boolean;
   default_api_access_enabled?: boolean;
+  default_ai_voice_enabled?: boolean;
+  default_monthly_tts_characters?: number | null;
 }
 
 export type PlanUpdate = Partial<Omit<PlanCreate, 'code'>>;

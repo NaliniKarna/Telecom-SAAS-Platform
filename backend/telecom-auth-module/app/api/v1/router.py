@@ -5,6 +5,7 @@ from app.api.v1.routes import (
     audit_logs,
     auth,
     ai_voice,
+    admin_ai_voice,
     change_requests,
     companies,
     company_settings,
@@ -49,3 +50,4 @@ api_router.include_router(missed_call.router)
 api_router.include_router(registration.router)
 api_router.include_router(external_sms.router)
 api_router.include_router(ai_voice.router)
+api_router.include_router(admin_ai_voice.router)

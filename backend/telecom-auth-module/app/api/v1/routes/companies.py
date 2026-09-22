@@ -24,10 +24,12 @@ from app.schemas.company import (
     CompanyRead,
     CompanyUpdate,
 )
+from app.schemas.subscription_plan import PlanRead
 from app.services.company_service import CompanyService
 from app.schemas.user import CompanyAdminInvite, UserRead
 from app.services.email_service import EmailService
 from app.services.user_management_service import UserManagementService
+from app.repositories.subscription_plan import SubscriptionPlanRepository
 
 router = APIRouter(prefix="/companies", tags=["Companies"])
 
@@ -36,6 +38,22 @@ CompanyDep = Annotated[CompanyService, Depends(get_company_service)]
 
 def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
+
+
+@router.get("/plans", response_model=list[PlanRead])
+async def list_plans_for_company_form(
+    service: CompanyDep,
+    _: Annotated[object, Depends(require_permission(Permission.COMPANY_READ.value))],
+):
+    """Active subscription plans, for the Company create/edit form's plan
+    picker. MUST be registered before GET /{company_id} below — a dynamic
+    path segment matches literally any string, including "plans", which
+    previously fell through here as an (invalid) company_id and returned a
+    misleading 422 instead of 404/200.
+    """
+    repo = SubscriptionPlanRepository(service.session)
+    rows, _total, _usage = await repo.search(offset=0, limit=1000, is_active=True)
+    return [PlanRead.model_validate(p) for p in rows]
 
 
 @router.get("", response_model=dict)

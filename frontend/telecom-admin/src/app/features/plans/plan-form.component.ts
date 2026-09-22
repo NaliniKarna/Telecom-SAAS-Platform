@@ -101,6 +101,11 @@ function codeValidator(control: AbstractControl): ValidationErrors | null {
             <mat-label>Monthly voice minutes</mat-label>
             <input matInput type="number" min="0" formControlName="default_monthly_voice_minutes" />
           </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Monthly TTS characters</mat-label>
+            <input matInput type="number" min="0" formControlName="default_monthly_tts_characters" />
+            <mat-hint>Ceiling only — not yet enforced by usage metering.</mat-hint>
+          </mat-form-field>
         </div>
       </section>
 
@@ -112,6 +117,7 @@ function codeValidator(control: AbstractControl): ValidationErrors | null {
           <mat-slide-toggle formControlName="default_missed_call_enabled">Missed Call</mat-slide-toggle>
           <mat-slide-toggle formControlName="default_freepbx_enabled">FreePBX</mat-slide-toggle>
           <mat-slide-toggle formControlName="default_api_access_enabled">API Access</mat-slide-toggle>
+          <mat-slide-toggle formControlName="default_ai_voice_enabled">AI Voice</mat-slide-toggle>
         </div>
       </section>
 
@@ -191,11 +197,13 @@ export class PlanFormComponent {
     default_max_api_keys: this.fb.control<number | null>(null),
     default_monthly_sms_limit: this.fb.control<number | null>(null),
     default_monthly_voice_minutes: this.fb.control<number | null>(null),
+    default_monthly_tts_characters: this.fb.control<number | null>(null),
     default_sms_enabled: [false],
     default_voice_enabled: [false],
     default_missed_call_enabled: [false],
     default_freepbx_enabled: [false],
     default_api_access_enabled: [false],
+    default_ai_voice_enabled: [false],
   });
 
   constructor() {
@@ -216,11 +224,13 @@ export class PlanFormComponent {
             default_max_api_keys: p.default_max_api_keys,
             default_monthly_sms_limit: p.default_monthly_sms_limit,
             default_monthly_voice_minutes: p.default_monthly_voice_minutes,
+            default_monthly_tts_characters: p.default_monthly_tts_characters,
             default_sms_enabled: p.default_sms_enabled,
             default_voice_enabled: p.default_voice_enabled,
             default_missed_call_enabled: p.default_missed_call_enabled,
             default_freepbx_enabled: p.default_freepbx_enabled,
             default_api_access_enabled: p.default_api_access_enabled,
+            default_ai_voice_enabled: p.default_ai_voice_enabled,
           });
           this.loading.set(false);
         },
@@ -247,11 +257,13 @@ export class PlanFormComponent {
       default_max_api_keys: raw.default_max_api_keys,
       default_monthly_sms_limit: raw.default_monthly_sms_limit,
       default_monthly_voice_minutes: raw.default_monthly_voice_minutes,
+      default_monthly_tts_characters: raw.default_monthly_tts_characters,
       default_sms_enabled: raw.default_sms_enabled,
       default_voice_enabled: raw.default_voice_enabled,
       default_missed_call_enabled: raw.default_missed_call_enabled,
       default_freepbx_enabled: raw.default_freepbx_enabled,
       default_api_access_enabled: raw.default_api_access_enabled,
+      default_ai_voice_enabled: raw.default_ai_voice_enabled,
     };
 
     if (id) {

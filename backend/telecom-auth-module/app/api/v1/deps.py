@@ -254,6 +254,16 @@ def get_voice_template_service(db: DbSession, ctx: CurrentContext) -> "VoiceTemp
     from app.services.ai_voice_service import VoiceTemplateService
     return VoiceTemplateService(db, ctx, AuditService(db))
 
+
+def get_admin_ai_voice_service(db: DbSession) -> "AdminAiVoiceService":
+    # No CurrentContext dependency here — this service is platform-scoped
+    # (no tenant/company concept at all), and the route layer gates access
+    # via require_role(SUPER_ADMIN) directly, not via a permission check
+    # that would otherwise pull CurrentContext in anyway.
+    from app.services.ai_voice_service import AdminAiVoiceService
+    return AdminAiVoiceService(db, AuditService(db))
+
+
 def get_user_management_service(
     db: DbSession, ctx: CurrentContext
 ) -> "UserManagementService":

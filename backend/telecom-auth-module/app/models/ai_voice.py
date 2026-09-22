@@ -36,11 +36,13 @@ from app.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 class AiVoice(Base, UUIDPkMixin, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "ai_voices"
 
-    # NULL = platform-wide voice, visible to every company. A non-NULL value
-    # is reserved for a future "custom/company voice" capability (explicitly
-    # out of scope this phase) — the column exists now so that feature won't
-    # need a schema change later, per the spec's "allow custom/company voices
-    # later without redesigning" requirement.
+    # NULL = platform-wide voice, visible to companies whose subscription
+    # plan grants it (see SubscriptionPlanVoice, added this phase). A
+    # non-NULL value is reserved for a future "custom/company voice"
+    # capability (explicitly out of scope this phase) — the column exists
+    # now so that feature won't need a schema change later. Created/edited
+    # by Super Admin only (app.services.ai_voice_service.AdminAiVoiceService);
+    # Company Admin has read-only access, filtered through their plan.
     company_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("companies.id", ondelete="CASCADE"),
@@ -108,4 +110,37 @@ class TtsPreview(Base, UUIDPkMixin, TimestampMixin):
     char_count: Mapped[int] = mapped_column(Integer, nullable=False)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), nullable=True
+    )
+
+
+class SubscriptionPlanVoice(Base):
+    """Which voices a subscription plan makes available to its companies.
+
+    Platform-owned relation (Super Admin curates it), read by the Company
+    Admin-facing voice list to filter what a company can actually select —
+    see AiVoiceRepository.list_visible_to_company(). Plain association
+    table, same minimal shape as the existing RolePermission/UserRole
+    tables in this codebase (composite PK, no surrogate id, no timestamp
+    mixin) — there's nothing here worth versioning beyond what AuditService
+    already records on assignment changes.
+
+    A plan with zero rows here has NO global voices visible to its
+    companies (safe-by-default for any newly created plan); migration 0029
+    backfills every pre-existing active plan against every pre-existing
+    active global voice specifically so this restriction doesn't silently
+    take voices away from companies that already had access before this
+    table existed.
+    """
+
+    __tablename__ = "subscription_plan_voices"
+
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("subscription_plans.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    voice_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("ai_voices.id", ondelete="CASCADE"),
+        primary_key=True,
     )

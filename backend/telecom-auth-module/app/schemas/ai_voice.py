@@ -30,6 +30,31 @@ class VoiceRead(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
+# Voice library — Super Admin management (platform-owned; see AdminAiVoiceService)
+# --------------------------------------------------------------------------- #
+class VoiceCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=255)
+    language: str = Field(min_length=2, max_length=20)
+    gender: str | None = Field(default=None, max_length=20)
+    description: str | None = Field(default=None, max_length=1000)
+    provider: str = Field(min_length=1, max_length=50)
+    provider_voice_id: str = Field(min_length=1, max_length=255)
+    status: VoiceStatus | None = None
+
+
+class VoiceUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str | None = Field(default=None, max_length=255)
+    language: str | None = Field(default=None, max_length=20)
+    gender: str | None = Field(default=None, max_length=20)
+    description: str | None = Field(default=None, max_length=1000)
+    provider: str | None = Field(default=None, max_length=50)
+    provider_voice_id: str | None = Field(default=None, max_length=255)
+    status: VoiceStatus | None = None
+
+
+# --------------------------------------------------------------------------- #
 # Voice Templates
 # --------------------------------------------------------------------------- #
 class VoiceTemplateCreate(BaseModel):
@@ -97,3 +122,35 @@ class TtsPreviewResponse(BaseModel):
     duration_seconds: int | None
     char_count: int
     created_at: datetime
+
+
+# --------------------------------------------------------------------------- #
+# Super Admin: plan <-> voice availability
+# --------------------------------------------------------------------------- #
+class PlanVoicesRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    voice_ids: list[uuid.UUID]
+
+
+class PlanVoicesSet(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    voice_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------- #
+# Super Admin: ad-hoc TTS preview (no template/company involved — see
+# AdminAiVoiceService.generate_preview)
+# --------------------------------------------------------------------------- #
+class AdminTtsPreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(min_length=1, max_length=4000)
+    voice_id: uuid.UUID
+
+
+class AdminTtsPreviewResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    voice_id: uuid.UUID
+    text: str
+    audio_url: str
+    duration_seconds: int | None
+    char_count: int

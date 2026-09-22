@@ -16,11 +16,13 @@ export const NAV_ITEMS: NavItem[] = [
 
   // ---- Super Admin (platform) workspace ----
   { label: 'Companies', icon: 'apartment', route: '/companies', superAdminOnly: true },
+  { label: 'Pending Registrations', icon: 'how_to_reg', route: '/registration/pending', superAdminOnly: true },
   { label: 'Subscription Plans', icon: 'workspace_premium', route: '/subscription-plans', superAdminOnly: true },
   { label: 'Audit Logs', icon: 'receipt_long', route: '/audit-logs', superAdminOnly: true },
   { label: 'Change Requests', icon: 'rule', route: '/change-requests', superAdminOnly: true },
   { label: 'Sender ID Approvals', icon: 'verified', route: '/sms-approvals', superAdminOnly: true },
   { label: 'Telephony', icon: 'settings_phone', route: '/telephony', superAdminOnly: true },
+  { label: 'AI Voice', icon: 'record_voice_over', route: '/admin/ai-voice/voices', superAdminOnly: true },
   { label: 'Platform Settings', icon: 'settings', route: '/settings', superAdminOnly: true },
 
   // ---- Company Admin (tenant) workspace ----

@@ -1,28 +1,39 @@
 """AI Voice / TTS foundation services.
 
-Three responsibilities, mirroring the SMS Foundation's shape (SmsService
-combines sender-IDs + templates the same way this combines voices +
-templates):
+  AiVoiceService       — Company Admin's voice-library READS. Filtered
+                        through the company's current subscription plan
+                        (see SubscriptionPlanVoice, added for Super Admin
+                        management) — a company only ever sees voices its
+                        plan actually grants. No mutation capability at
+                        all: activating/deactivating a voice, or curating
+                        which voices a plan grants, are platform-owned
+                        actions now handled exclusively by
+                        AdminAiVoiceService (see spec ownership rules,
+                        "Company Admin must NOT be able to modify
+                        platform-owned voice/provider configuration").
 
-  AiVoiceService      — voice library reads + activate/deactivate. No
-                        creation endpoint this phase (voices are seeded/
-                        managed at the platform level — see spec section 5,
-                        "do NOT implement voice cloning/training yet").
-
-  VoiceTemplateService — tenant-scoped Voice Template CRUD, template
+  VoiceTemplateService  — tenant-scoped Voice Template CRUD, template
                         rendering (reuses the SMS renderer — see below), and
                         TTS preview generation. Preview generation is
                         explicitly NOT a campaign: no recipients, no Kafka,
                         no PBX call. It calls TTSService synchronously and
                         records one TtsPreview row.
 
+  AdminAiVoiceService   — Super Admin's platform-level layer: the voice
+                        catalog itself (create/edit/activate/deactivate —
+                        no company scoping, no plan filtering, since these
+                        ARE the platform configuration a plan filters
+                        against) and which voices each subscription plan
+                        grants. Gated exclusively by require_role(SUPER_ADMIN)
+                        at the route layer (see app.api.v1.routes.admin_ai_voice)
+                        — this does not depend on, or intersect with, any
+                        Company Admin permission.
+
 Template rendering reuse: extract_variables/render_template/missing_variables
 in app.services.sms_renderer are already fully generic (only
 unsupported_variables() is SMS-specific, and this module doesn't use it) —
 so Voice Templates import and use those functions directly rather than
-duplicating the regex engine. This is also exactly what the spec asks for
-under "Template Rendering": a reusable renderer, usable later by Voice
-Campaign processing — reusing the same functions IS that reusability.
+duplicating the regex engine.
 """
 from __future__ import annotations
 
@@ -36,6 +47,7 @@ from app.core.exceptions import CompanyInactiveError, NotFoundError, ValidationE
 from app.models.ai_voice import AiVoice, TtsPreview, VoiceTemplate
 from app.repositories.ai_voice_repository import (
     AiVoiceRepository,
+    SubscriptionPlanVoiceRepository,
     TtsPreviewRepository,
     VoiceTemplateRepository,
 )
@@ -53,46 +65,66 @@ logger = logging.getLogger(__name__)
 _VOICE_ENTITY = "ai_voice"
 _TEMPLATE_ENTITY = "voice_template"
 _PREVIEW_ENTITY = "tts_preview"
+_PLAN_ENTITY = "subscription_plan"
+
+_UNSET = object()
+
+
+async def _load_plan_id(session: AsyncSession, company_id) -> Optional[str]:
+    """Shared by AiVoiceService and VoiceTemplateService — both need the
+    company's current plan_id to filter voices through
+    SubscriptionPlanVoice. A missing company or missing plan resolves to
+    None, which the repository layer already treats as "no global voices
+    visible" (safe default, not an error) rather than raising here.
+    """
+    if company_id is None:
+        return None
+    company = await CompanyRepository(session).get_by_id(company_id)
+    return company.plan_id if company else None
 
 
 class AiVoiceService:
-    """Voice library reads + status toggling. Tenant-aware only insofar as
-    list/get filter to voices visible to the caller's company (global +
-    company-owned, once company-owned voices exist)."""
+    """Company Admin's voice-library reads. See module docstring — no
+    mutation methods live here on purpose."""
 
     def __init__(self, session: AsyncSession, ctx=None, audit: AuditService | None = None):
         self.session = session
         self.ctx = ctx
         self.audit = audit or AuditService(session)
         self.voices = AiVoiceRepository(session)
+        self._plan_id_cache = _UNSET
 
     @property
     def _company_id(self):
         return self.ctx.company_id if self.ctx else None
 
-    async def list_voices(self, *, status=None, offset: int = 0, limit: int = 20):
-        return await self.voices.list_available(
-            company_id=self._company_id, status=status, offset=offset, limit=limit,
+    async def _plan_id(self):
+        if self._plan_id_cache is _UNSET:
+            self._plan_id_cache = await _load_plan_id(self.session, self._company_id)
+        return self._plan_id_cache
+
+    async def list_voices(self, *, offset: int = 0, limit: int = 20):
+        """Company Admin always sees active-only, regardless of caller
+        input — there's no legitimate reason to browse a voice you can't
+        select, and this is the "must no longer be selectable" requirement
+        applied to browsing, not just to mutation paths (which
+        _get_voice_or_raise on VoiceTemplateService already enforced
+        correctly before this fix — this closes the matching gap on the
+        list/detail views).
+        """
+        plan_id = await self._plan_id()
+        return await self.voices.list_visible_to_company(
+            company_id=self._company_id, plan_id=plan_id,
+            status=VoiceStatus.ACTIVE.value, offset=offset, limit=limit,
         )
 
     async def get_voice(self, voice_id) -> AiVoice:
-        voice = await self.voices.get_available(voice_id, company_id=self._company_id)
-        if voice is None:
-            raise NotFoundError("Voice not found")
-        return voice
-
-    async def set_voice_status(
-        self, voice_id, status: VoiceStatus, *, actor_id=None, ip=None,
-    ) -> AiVoice:
-        voice = await self.get_voice(voice_id)
-        await self.voices.update(voice, status=status)
-        await self.audit.record(
-            action="activate" if status == VoiceStatus.ACTIVE else "deactivate",
-            entity_type=_VOICE_ENTITY, entity_id=str(voice.id),
-            actor_id=actor_id, company_id=self._company_id, ip_address=ip,
+        plan_id = await self._plan_id()
+        voice = await self.voices.get_visible_to_company(
+            voice_id, company_id=self._company_id, plan_id=plan_id,
         )
-        await self.session.commit()
-        await self.session.refresh(voice)
+        if voice is None or voice.status != VoiceStatus.ACTIVE.value:
+            raise NotFoundError("Voice not found")
         return voice
 
 
@@ -107,10 +139,16 @@ class VoiceTemplateService:
         self.voices = AiVoiceRepository(session)
         self.previews = TtsPreviewRepository(session, ctx)
         self._tts = TTSService()
+        self._plan_id_cache = _UNSET
 
     @property
     def _company_id(self):
         return self.ctx.company_id if self.ctx else None
+
+    async def _plan_id(self):
+        if self._plan_id_cache is _UNSET:
+            self._plan_id_cache = await _load_plan_id(self.session, self._company_id)
+        return self._plan_id_cache
 
     # --- entitlement gate --------------------------------------------------
     async def assert_ai_voice_enabled(self) -> None:
@@ -138,9 +176,23 @@ class VoiceTemplateService:
         return template
 
     async def _get_voice_or_raise(self, voice_id) -> AiVoice:
-        voice = await self.voices.get_available(voice_id, company_id=self._company_id)
+        """Enforcement point for spec requirement 7 items 3+4: the voice
+        must both be active AND available under the company's current
+        subscription plan. A voice that fails either check is treated
+        exactly like one that doesn't exist — no distinction is leaked to
+        the caller about which reason applies, matching how the rest of
+        this app avoids being an oracle for enumeration.
+        """
+        plan_id = await self._plan_id()
+        voice = await self.voices.get_visible_to_company(
+            voice_id, company_id=self._company_id, plan_id=plan_id,
+        )
         if voice is None:
-            raise ValidationError("Selected voice does not exist or is not available")
+            raise ValidationError(
+                "Selected voice does not exist or is not available under your company's plan"
+            )
+        if voice.status != VoiceStatus.ACTIVE.value:
+            raise ValidationError("Selected voice is not active")
         return voice
 
     async def create_template(self, data, *, actor_id=None, ip=None) -> VoiceTemplate:
@@ -216,9 +268,9 @@ class VoiceTemplateService:
             )
 
         target_voice_id = voice_id or template.voice_id
+        # _get_voice_or_raise already enforces active + plan-availability —
+        # no separate status check needed here.
         voice = await self._get_voice_or_raise(target_voice_id)
-        if voice.status != VoiceStatus.ACTIVE.value:
-            raise ValidationError("Selected voice is not active")
 
         result = self._tts.synthesize_and_store(
             text=rendered,
@@ -245,3 +297,133 @@ class VoiceTemplateService:
         await self.session.commit()
         await self.session.refresh(preview)
         return preview
+
+
+class AdminAiVoiceService:
+    """Super Admin's platform-level AI Voice management.
+
+    No company/tenant scoping anywhere in this class — the voice catalog
+    and plan-voice availability ARE the platform configuration everything
+    else filters against, per the spec's ownership rules. Gated exclusively
+    by require_role(SUPER_ADMIN) at the route layer, same pattern already
+    used by app.api.v1.routes.subscription_plans — no new RBAC permission
+    was needed for that gate.
+    """
+
+    def __init__(self, session: AsyncSession, audit: AuditService | None = None):
+        self.session = session
+        self.audit = audit or AuditService(session)
+        self.voices = AiVoiceRepository(session)
+        self.plan_voices = SubscriptionPlanVoiceRepository(session)
+        self._tts = TTSService()
+
+    # --- voice catalog -------------------------------------------------
+    async def list_voices(self, *, search=None, status=None, offset: int = 0, limit: int = 20):
+        return await self.voices.search_all(search=search, status=status, offset=offset, limit=limit)
+
+    async def get_voice(self, voice_id) -> AiVoice:
+        voice = await self.voices.get_by_id(voice_id)
+        if voice is None:
+            raise NotFoundError("Voice not found")
+        return voice
+
+    async def create_voice(self, data, *, actor_id=None, ip=None) -> AiVoice:
+        voice = await self.voices.create(
+            company_id=None,  # platform voice — company-owned custom voices are a future capability
+            name=data.name,
+            language=data.language,
+            gender=data.gender,
+            description=data.description,
+            provider=data.provider,
+            provider_voice_id=data.provider_voice_id,
+            status=data.status or VoiceStatus.ACTIVE,
+        )
+        await self.audit.record(
+            action="create", entity_type=_VOICE_ENTITY, entity_id=str(voice.id),
+            actor_id=actor_id, ip_address=ip,
+            new_values={
+                "name": voice.name, "provider": voice.provider,
+                "provider_voice_id": voice.provider_voice_id,
+            },
+        )
+        await self.session.commit()
+        await self.session.refresh(voice)
+        return voice
+
+    async def update_voice(self, voice_id, data, *, actor_id=None, ip=None) -> AiVoice:
+        voice = await self.get_voice(voice_id)
+        patch = data.model_dump(exclude_unset=True)
+        if patch:
+            await self.voices.update(voice, **patch)
+            await self.audit.record(
+                action="update", entity_type=_VOICE_ENTITY, entity_id=str(voice.id),
+                actor_id=actor_id, ip_address=ip, new_values=patch,
+            )
+            await self.session.commit()
+            await self.session.refresh(voice)
+        return voice
+
+    async def set_voice_status(
+        self, voice_id, status: VoiceStatus, *, actor_id=None, ip=None,
+    ) -> AiVoice:
+        """A deactivated voice becomes immediately unselectable by every
+        Company Admin — enforced by AiVoiceRepository's status filter and
+        VoiceTemplateService._get_voice_or_raise, both of which live
+        upstream of any cache, so this takes effect on the very next
+        company-side request.
+        """
+        voice = await self.get_voice(voice_id)
+        await self.voices.update(voice, status=status)
+        await self.audit.record(
+            action="activate" if status == VoiceStatus.ACTIVE else "deactivate",
+            entity_type=_VOICE_ENTITY, entity_id=str(voice.id),
+            actor_id=actor_id, ip_address=ip,
+        )
+        await self.session.commit()
+        await self.session.refresh(voice)
+        return voice
+
+    # --- plan <-> voice availability ------------------------------------
+    async def list_plan_voice_ids(self, plan_id) -> list:
+        return await self.plan_voices.list_voice_ids_for_plan(plan_id)
+
+    async def set_plan_voices(
+        self, plan_id, voice_ids: list, *, actor_id=None, ip=None,
+    ) -> list:
+        added, removed = await self.plan_voices.set_voices_for_plan(plan_id, voice_ids)
+        if added or removed:
+            await self.audit.record(
+                action="plan_voices_updated", entity_type=_PLAN_ENTITY,
+                entity_id=str(plan_id), actor_id=actor_id, ip_address=ip,
+                new_values={
+                    "added": [str(v) for v in added],
+                    "removed": [str(v) for v in removed],
+                },
+            )
+        await self.session.commit()
+        return await self.plan_voices.list_voice_ids_for_plan(plan_id)
+
+    # --- ad-hoc TTS preview ---------------------------------------------
+    async def generate_preview(self, text: str, voice_id, *, actor_id=None, ip=None):
+        """No template, no company, no persisted TtsPreview row — that
+        table is scoped to a company + Voice Template (company_id and
+        voice_template_id are both NOT NULL), which doesn't fit a
+        platform-level smoke test of a voice. Reuses the exact same
+        TTSService every other TTS path in the app uses; nothing here
+        talks to a provider directly.
+        """
+        voice = await self.get_voice(voice_id)
+        if voice.status != VoiceStatus.ACTIVE.value:
+            raise ValidationError("Selected voice is not active")
+
+        result = self._tts.synthesize_and_store(
+            text=text, provider_voice_id=voice.provider_voice_id,
+            storage_prefix="tts/admin-preview",
+        )
+        await self.audit.record(
+            action="admin_tts_preview_generated", entity_type=_VOICE_ENTITY,
+            entity_id=str(voice.id), actor_id=actor_id, ip_address=ip,
+            new_values={"char_count": result.char_count},
+        )
+        await self.session.commit()
+        return result, voice

@@ -63,6 +63,18 @@ class SubscriptionPlan(Base, UUIDPkMixin, TimestampMixin, SoftDeleteMixin):
     default_ai_voice_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
+    # The "minimum required usage tracking" identified for this phase: a
+    # ceiling value only, same NULL=unlimited convention as
+    # default_monthly_sms_limit/default_monthly_voice_minutes above.
+    # Deliberately NOT enforced yet — there is no per-company usage-counter
+    # mechanism anywhere in this codebase (SMS/voice minutes aren't
+    # metered either), and building one now would be exactly the "large
+    # billing/usage platform" this phase was told not to build. This field
+    # exists so Super Admin can set the intended ceiling in the plan editor
+    # today, ready for whichever future phase adds real metering.
+    default_monthly_tts_characters: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
 
     # Attribution (nullable: seed/system rows and pre-existing plans have none).
     created_by: Mapped[uuid.UUID | None] = mapped_column(

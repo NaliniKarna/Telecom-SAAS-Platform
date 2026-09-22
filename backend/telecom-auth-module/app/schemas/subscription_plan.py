@@ -21,6 +21,8 @@ class _PlanMutableFields(BaseModel):
     default_missed_call_enabled: bool = False
     default_freepbx_enabled: bool = False
     default_api_access_enabled: bool = False
+    default_ai_voice_enabled: bool = False
+    default_monthly_tts_characters: int | None = Field(default=None, ge=0)
 
 
 class PlanCreate(_PlanMutableFields):
@@ -55,6 +57,8 @@ class PlanUpdate(BaseModel):
     default_missed_call_enabled: bool | None = None
     default_freepbx_enabled: bool | None = None
     default_api_access_enabled: bool | None = None
+    default_ai_voice_enabled: bool | None = None
+    default_monthly_tts_characters: int | None = Field(default=None, ge=0)
 
 
 class PlanRead(BaseModel):
@@ -74,6 +78,8 @@ class PlanRead(BaseModel):
     default_missed_call_enabled: bool
     default_freepbx_enabled: bool
     default_api_access_enabled: bool
+    default_ai_voice_enabled: bool
+    default_monthly_tts_characters: int | None
     created_by: uuid.UUID | None
     updated_by: uuid.UUID | None
     created_at: datetime
