@@ -48,6 +48,9 @@ export enum Permission {
   AiVoiceRead = 'ai_voice.read',
   AiVoiceManage = 'ai_voice.manage',
   AiVoicePreview = 'ai_voice.preview',
+  // Voice Campaigns (Phase 4A)
+  AiVoiceCampaignRead = 'ai_voice.campaign.read',
+  AiVoiceCampaignManage = 'ai_voice.campaign.manage',
   // Audit & stats
   AuditRead = 'audit.read',
   StatsRead = 'stats.read',

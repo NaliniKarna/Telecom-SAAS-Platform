@@ -38,6 +38,7 @@ duplicating the regex engine.
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -59,6 +60,7 @@ from app.services.sms_renderer import (
     render_template,
 )
 from app.services.tts_service import TTSService
+from app.services.tts_usage_service import TtsUsageService
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +133,10 @@ class AiVoiceService:
 class VoiceTemplateService:
     """Voice Template CRUD, rendering, and TTS preview generation."""
 
-    def __init__(self, session: AsyncSession, ctx=None, audit: AuditService | None = None):
+    def __init__(
+        self, session: AsyncSession, ctx=None, audit: AuditService | None = None,
+        tts_usage: TtsUsageService | None = None,
+    ):
         self.session = session
         self.ctx = ctx
         self.audit = audit or AuditService(session)
@@ -139,7 +144,9 @@ class VoiceTemplateService:
         self.voices = AiVoiceRepository(session)
         self.previews = TtsPreviewRepository(session, ctx)
         self._tts = TTSService()
+        self.usage = tts_usage or TtsUsageService(session)
         self._plan_id_cache = _UNSET
+        self._monthly_limit_cache = _UNSET
 
     @property
     def _company_id(self):
@@ -149,6 +156,18 @@ class VoiceTemplateService:
         if self._plan_id_cache is _UNSET:
             self._plan_id_cache = await _load_plan_id(self.session, self._company_id)
         return self._plan_id_cache
+
+    async def _monthly_tts_limit(self):
+        """The company's plan-level monthly TTS character ceiling (NULL =
+        unlimited). Cached per service instance, same rationale as
+        _plan_id() above — this service is constructed fresh per request."""
+        if self._monthly_limit_cache is _UNSET:
+            company = await CompanyRepository(self.session).get_by_id(self._company_id)
+            self._monthly_limit_cache = (
+                company.plan.default_monthly_tts_characters
+                if company and company.plan else None
+            )
+        return self._monthly_limit_cache
 
     # --- entitlement gate --------------------------------------------------
     async def assert_ai_voice_enabled(self) -> None:
@@ -257,6 +276,16 @@ class VoiceTemplateService:
         self, template_id, values: dict[str, str], *,
         voice_id: Optional[str] = None, actor_id=None, ip=None,
     ) -> TtsPreview:
+        """TTS usage accounting (Phase 4A quota metering): the character
+        count is known before the provider is ever called, so this
+        reserves that exact amount first. A successful synthesis converts
+        the reservation to real consumed usage; any failure (including a
+        provider error re-raised from TTSService) releases it instead —
+        matching the spec's "successful preview counts as consumed, failed
+        does not" rule. Each call reserves against a FRESH preview id, so a
+        user re-clicking "Generate" after a failure never double-counts a
+        previous attempt — it's simply a new reservation.
+        """
         await self.assert_ai_voice_enabled()
         template = await self.get_template(template_id)
 
@@ -272,13 +301,32 @@ class VoiceTemplateService:
         # no separate status check needed here.
         voice = await self._get_voice_or_raise(target_voice_id)
 
-        result = self._tts.synthesize_and_store(
-            text=rendered,
-            provider_voice_id=voice.provider_voice_id,
-            storage_prefix=f"tts/{self._company_id}",
+        char_count = len(rendered)
+        preview_id = uuid.uuid4()
+        monthly_limit = await self._monthly_tts_limit()
+
+        # Raises ValidationError (422) if this would exceed the monthly
+        # ceiling — nothing has been generated or stored yet at this point.
+        await self.usage.reserve(
+            company_id=self._company_id, monthly_limit=monthly_limit,
+            characters=char_count, reference_type="tts_preview", reference_id=preview_id,
         )
 
+        try:
+            result = self._tts.synthesize_and_store(
+                text=rendered,
+                provider_voice_id=voice.provider_voice_id,
+                storage_prefix=f"tts/{self._company_id}",
+            )
+        except Exception:
+            await self.usage.release(reference_type="tts_preview", reference_id=preview_id)
+            await self.session.commit()
+            raise
+
+        await self.usage.consume(reference_type="tts_preview", reference_id=preview_id)
+
         preview = await self.previews.create(
+            id=preview_id,
             company_id=self._company_id,
             voice_template_id=template.id,
             voice_id=voice.id,

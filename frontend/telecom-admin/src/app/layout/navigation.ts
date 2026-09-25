@@ -37,8 +37,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: 'Contact Groups', icon: 'format_list_bulleted', route: '/contact-lists', permissions: [Permission.ContactRead], hideForSuperAdmin: true },
     ],
   },
-  { label: 'Company Settings', icon: 'business', route: '/company-settings', permissions: [Permission.CompanyRead], hideForSuperAdmin: true },
-
+  
   // ---- SMS (collapsible) ----
   {
     label: 'SMS', icon: 'sms',
@@ -83,6 +82,8 @@ export const NAV_ITEMS: NavItem[] = [
     children: [
       { label: 'Voices', icon: 'graphic_eq', route: '/ai-voice/voices', permissions: [Permission.AiVoiceRead], hideForSuperAdmin: true },
       { label: 'Voice Templates', icon: 'description', route: '/ai-voice/templates', permissions: [Permission.AiVoiceRead], hideForSuperAdmin: true },
+      { label: 'Voice Campaigns', icon: 'campaign', route: '/voice-campaigns', permissions: [Permission.AiVoiceCampaignRead], hideForSuperAdmin: true },
     ],
   },
+  { label: 'Company Settings', icon: 'business', route: '/company-settings', permissions: [Permission.CompanyRead], hideForSuperAdmin: true },
 ];

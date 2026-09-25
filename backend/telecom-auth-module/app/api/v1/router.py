@@ -25,6 +25,7 @@ from app.api.v1.routes import (
     telephony,
     users,
     voice,
+    voice_campaign,
 )
 
 api_router = APIRouter()
@@ -51,3 +52,4 @@ api_router.include_router(registration.router)
 api_router.include_router(external_sms.router)
 api_router.include_router(ai_voice.router)
 api_router.include_router(admin_ai_voice.router)
+api_router.include_router(voice_campaign.router)

@@ -19,6 +19,14 @@ from app.models.sms import (
 from app.models.telephony import TelephonyConnection
 from app.models.voice import VoiceCallLog, VoiceExtension
 from app.models.ai_voice import AiVoice, SubscriptionPlanVoice, TtsPreview, VoiceTemplate
+from app.models.voice_campaign import (
+    TtsUsage,
+    TtsUsageReservation,
+    VoiceCampaign,
+    VoiceCampaignAudio,
+    VoiceCampaignRecipient,
+    VoiceCampaignRecipientAttempt,
+)
 from app.models.missed_call import MissedCall, MissedCallCallback, MissedCallNote
 from app.models.user import User, UserRole
 
@@ -41,6 +49,12 @@ __all__ = [
     "VoiceTemplate",
     "TtsPreview",
     "SubscriptionPlanVoice",
+    "TtsUsage",
+    "TtsUsageReservation",
+    "VoiceCampaign",
+    "VoiceCampaignRecipient",
+    "VoiceCampaignRecipientAttempt",
+    "VoiceCampaignAudio",
     "MissedCall",
     "MissedCallNote",
     "MissedCallCallback",

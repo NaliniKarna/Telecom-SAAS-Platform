@@ -48,8 +48,26 @@ class KafkaTopics:
     SMS_MESSAGE_SEND_DLQ = "sms.message.send.dlq"
     SMS_MESSAGE_STATUS_DLQ = "sms.message.status.updated.dlq"
 
+    # Voice Campaign pipeline. VOICE_CAMPAIGN_CREATED below was reserved in
+    # Phase 4A as a placeholder "campaign created" fan-out topic mirroring
+    # the SMS pipeline's two-hop shape (campaign.created -> per-message
+    # events). Phase 4B does not use that shape: Voice Campaign Start
+    # already resolves and freezes the full recipient list synchronously
+    # (Phase 4A), so there is nothing left to "fan out" from a campaign-level
+    # event — Start publishes per-recipient execution events directly.
+    # VOICE_CAMPAIGN_CREATED is left in place, unused, rather than deleted,
+    # in case a future phase wants a genuine campaign-level lifecycle event
+    # (e.g. for external webhooks) — it is NOT the topic the worker consumes.
+    VOICE_CAMPAIGN_CREATED = "voice.campaign.created"
+    VOICE_CAMPAIGN_CREATED_DLQ = "voice.campaign.created.dlq"
+
+    # The actual Phase 4B execution topic: one event per recipient, published
+    # by VoiceCampaignService.start_campaign() (after its own commit) and by
+    # retry_recipient(). Consumed by app.workers.voice_campaign_worker.
+    VOICE_CAMPAIGN_RECIPIENT_EXECUTE = "voice.campaign.recipient.execute"
+    VOICE_CAMPAIGN_RECIPIENT_EXECUTE_DLQ = "voice.campaign.recipient.execute.dlq"
+
     # Future modules (reserved, not implemented yet)
-    # VOICE_CAMPAIGN_CREATED = "voice.campaign.created"
     # NOTIFICATION_SEND = "notification.send"
     # SCHEDULED_JOB_TICK = "scheduled.job.tick"
 
@@ -117,7 +135,9 @@ class PlatformProducer:
 
     async def start(self) -> None:
         try:
-            from aiokafka import AIOKafkaProducer
+            from importlib import import_module
+            
+            AIOKafkaProducer = import_module("aiokafka").AIOKafkaProducer
             self._producer = AIOKafkaProducer(
                 bootstrap_servers=self._servers,
                 client_id=self._client_id,
@@ -211,8 +231,12 @@ class PlatformConsumer:
     async def run(self) -> None:
         """Main consumer loop. Blocks until stop() is called."""
         try:
-            from aiokafka import AIOKafkaConsumer
-            from aiokafka.errors import CommitFailedError, UnknownMemberIdError
+            from importlib import import_module
+        
+            aiokafka = import_module("aiokafka")
+            AIOKafkaConsumer = aiokafka.AIOKafkaConsumer
+            CommitFailedError = aiokafka.errors.CommitFailedError
+            UnknownMemberIdError = aiokafka.errors.UnknownMemberIdError
         except ImportError:
             logger.error("aiokafka not installed — cannot start consumer")
             return
@@ -358,7 +382,11 @@ async def get_producer() -> PlatformProducer:
     if _producer_instance is None:
         async with _producer_lock:
             if _producer_instance is None:  # re-check after acquiring lock
-                from app.core.config import settings
+                # Resolve this dynamically so deployments that package ``app``
+                # differently do not fail static import resolution here.
+                from importlib import import_module
+
+                settings = import_module("app.core.config").settings
                 producer = PlatformProducer(settings.KAFKA_BOOTSTRAP_SERVERS)
                 await producer.start()
                 _producer_instance = producer

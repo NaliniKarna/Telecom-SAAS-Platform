@@ -4,7 +4,14 @@ Assembles the request-scoped dependency chain:
   get_db -> token payload -> tenant context -> current user -> repos -> services
 and exposes parameterized authorization guards.
 """
-from typing import Annotated, Callable
+from typing import TYPE_CHECKING, Annotated, Callable
+
+if TYPE_CHECKING:
+    from app.services.ai_voice_service import AdminAiVoiceService, AiVoiceService
+    from app.services.missed_call_service import MissedCallService
+    from app.services.tts_usage_service import TtsUsageService
+    from app.services.voice_campaign_service import VoiceCampaignService
+    from app.services.ai_voice_service import VoiceTemplateService
 
 from fastapi import Depends, Request
 from fastapi.security import (
@@ -41,6 +48,7 @@ from app.services.api_key_service import (
 from app.services.contact_service import ContactService
 from app.services.contact_import_service import ContactImportService
 from app.services.telephony_service import TelephonyService
+from app.services.voice_service import VoiceService
 from app.repositories.telephony_repository import TelephonyConnectionRepository
 from app.services.registration_service import RegistrationService
 from app.services.contact_list_service import ContactListService
@@ -252,7 +260,18 @@ def get_ai_voice_service(db: DbSession, ctx: CurrentContext) -> "AiVoiceService"
 
 def get_voice_template_service(db: DbSession, ctx: CurrentContext) -> "VoiceTemplateService":
     from app.services.ai_voice_service import VoiceTemplateService
-    return VoiceTemplateService(db, ctx, AuditService(db))
+    from app.services.tts_usage_service import TtsUsageService
+    return VoiceTemplateService(db, ctx, AuditService(db), TtsUsageService(db))
+
+
+def get_tts_usage_service(db: DbSession) -> "TtsUsageService":
+    from app.services.tts_usage_service import TtsUsageService
+    return TtsUsageService(db)
+
+
+def get_voice_campaign_service(db: DbSession, ctx: CurrentContext) -> "VoiceCampaignService":
+    from app.services.voice_campaign_service import VoiceCampaignService
+    return VoiceCampaignService(db, ctx, AuditService(db))
 
 
 def get_admin_ai_voice_service(db: DbSession) -> "AdminAiVoiceService":
@@ -363,8 +382,6 @@ def get_voice_service(db: DbSession, ctx: CurrentContext) -> "VoiceService":
         VoiceCallLogRepository,
         VoiceExtensionRepository,
     )
-    from app.services.voice_service import VoiceService
-
     return VoiceService(
         db,
         VoiceExtensionRepository(db, ctx),

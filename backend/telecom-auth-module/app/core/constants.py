@@ -175,6 +175,54 @@ class CallbackOutcome(str, enum.Enum):
     FAILED = "failed"
 
 
+class VoiceCampaignStatus(str, enum.Enum):
+    """Voice Campaign lifecycle (Phase 4A). Mirrors SmsCampaignStatus's shape;
+    adds PARTIALLY_COMPLETED for the future worker (Phase 4B), which this
+    phase's Start transaction never sets itself."""
+    DRAFT = "draft"
+    SCHEDULED = "scheduled"
+    PROCESSING = "processing"
+    PARTIALLY_COMPLETED = "partially_completed"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+# Terminal/active-set helpers, mirrored from the SMS campaign conventions.
+VOICE_CAMPAIGN_EDITABLE_STATUSES = frozenset([VoiceCampaignStatus.DRAFT.value])
+VOICE_CAMPAIGN_STARTABLE_STATUSES = frozenset([VoiceCampaignStatus.DRAFT.value])
+VOICE_CAMPAIGN_CANCELLABLE_STATUSES = frozenset([
+    VoiceCampaignStatus.DRAFT.value,
+    VoiceCampaignStatus.SCHEDULED.value,
+    VoiceCampaignStatus.PROCESSING.value,
+])
+
+
+class VoiceCampaignRecipientStatus(str, enum.Enum):
+    """Recipient execution lifecycle. QUEUED/PROCESSING/READY are set by the
+    Start transaction (Phase 4A) and represent "snapshot built, not yet
+    executed". CALLING onward are Phase 4B execution states — this phase
+    creates recipients in QUEUED and never advances them further."""
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    READY = "ready"
+    CALLING = "calling"
+    ANSWERED = "answered"
+    NO_ANSWER = "no_answer"
+    BUSY = "busy"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class TtsReservationStatus(str, enum.Enum):
+    """Status of one TtsUsageReservation row. OPEN = still holds some/all of
+    its reserved characters against the monthly ceiling. CLOSED = fully
+    consumed and/or released; permanently done, never reopened (a retry
+    creates a new reservation against a new reference id instead)."""
+    OPEN = "open"
+    CLOSED = "closed"
+
+
 class Permission(str, enum.Enum):
     """Canonical permission catalog (resource.action)."""
 
@@ -237,6 +285,11 @@ class Permission(str, enum.Enum):
     AI_VOICE_MANAGE = "ai_voice.manage"
     AI_VOICE_PREVIEW = "ai_voice.preview"
 
+    # Voice Campaigns (Phase 4A — foundation + TTS usage metering only;
+    # execution/dialing is Phase 4B)
+    AI_VOICE_CAMPAIGN_READ = "ai_voice.campaign.read"
+    AI_VOICE_CAMPAIGN_MANAGE = "ai_voice.campaign.manage"
+
 
 # Role -> permission mapping. Super admin is handled as a wildcard at check time.
 ROLE_PERMISSIONS: dict[RoleName, set[Permission]] = {
@@ -269,6 +322,8 @@ ROLE_PERMISSIONS: dict[RoleName, set[Permission]] = {
         Permission.AI_VOICE_READ,
         Permission.AI_VOICE_MANAGE,
         Permission.AI_VOICE_PREVIEW,
+        Permission.AI_VOICE_CAMPAIGN_READ,
+        Permission.AI_VOICE_CAMPAIGN_MANAGE,
     },
     RoleName.COMPANY_USER: {
         Permission.USER_READ,

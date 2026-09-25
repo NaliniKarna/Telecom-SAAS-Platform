@@ -409,6 +409,35 @@ export const routes: Routes = [
         ],
       },
       {
+        path: 'voice-campaigns',
+        canActivate: [permissionGuard([Permission.AiVoiceCampaignRead])],
+        children: [
+          {
+            path: '',
+            pathMatch: 'full',
+            loadComponent: () =>
+              import('./features/voice-campaigns/voice-campaign-list.component').then((m) => m.VoiceCampaignListComponent),
+          },
+          {
+            path: 'new',
+            canActivate: [permissionGuard([Permission.AiVoiceCampaignManage])],
+            loadComponent: () =>
+              import('./features/voice-campaigns/voice-campaign-form.component').then((m) => m.VoiceCampaignFormComponent),
+          },
+          {
+            path: ':id/edit',
+            canActivate: [permissionGuard([Permission.AiVoiceCampaignManage])],
+            loadComponent: () =>
+              import('./features/voice-campaigns/voice-campaign-form.component').then((m) => m.VoiceCampaignFormComponent),
+          },
+          {
+            path: ':id',
+            loadComponent: () =>
+              import('./features/voice-campaigns/voice-campaign-detail.component').then((m) => m.VoiceCampaignDetailComponent),
+          },
+        ],
+      },
+      {
         path: 'sms-approvals',
         canActivate: [roleGuard([RoleName.SuperAdmin])],
         loadComponent: () =>

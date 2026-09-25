@@ -45,7 +45,19 @@ _DEFAULT_VOICE_SETTINGS = {
 
 
 class ElevenLabsProviderError(RuntimeError):
-    """Raised when the ElevenLabs API call fails or is misconfigured."""
+    """Raised when the ElevenLabs API call fails or is misconfigured.
+
+    status_code distinguishes transient from permanent failures for
+    Phase 4B's worker retry classification (app.workers.voice_campaign_worker
+    ._is_transient_tts_error): None (a network-level httpx.HTTPError, no
+    response at all) or >=500 is treated as transient/worth retrying; a 4xx
+    response (bad request, 401/402/403 auth or billing, 422 validation) is
+    permanent — retrying the exact same request won't fix it.
+    """
+
+    def __init__(self, message: str, *, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class ElevenLabsTTSProvider:
@@ -90,7 +102,8 @@ class ElevenLabsTTSProvider:
                 extra={"status": response.status_code, "detail": detail},
             )
             raise ElevenLabsProviderError(
-                f"ElevenLabs returned {response.status_code}: {detail}"
+                f"ElevenLabs returned {response.status_code}: {detail}",
+                status_code=response.status_code,
             )
 
         return TTSResult(
